@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
-from . import authenticode, formats_cfb, ovba, similarity, tlsh
+from . import authenticode, formats_cfb, formats_pdf, ovba, similarity, tlsh
 from . import segmented as segmented_mod
 from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
@@ -88,6 +88,31 @@ class Engine:
         for finding in analysis.get("findings", []):
             evidence.append({"type": "format_finding", **finding})
         mark("format_parse")
+        if fmt == "pdf":
+            pdf_analysis = formats_pdf.parse_pdf(data)
+            analysis = pdf_analysis
+            kw = pdf_analysis.get("keywords", {})
+            kinds = [a["kind"] for a in pdf_analysis.get("actions", [])]
+            if kw.get("OpenAction") and "JavaScript" in kinds:
+                score += 30
+                evidence.append({"type": "heuristic",
+                                 "heuristic": "pdf_openaction_javascript",
+                                 "points": 30,
+                                 "detail": "document runs JavaScript at "
+                                           "open time"})
+            if "Launch" in kinds:
+                score += 20
+                evidence.append({"type": "heuristic",
+                                 "heuristic": "pdf_launch_action",
+                                 "points": 20,
+                                 "detail": "document carries a Launch "
+                                           "action (external program)"})
+            if kw.get("EmbeddedFiles") or kw.get("EmbeddedFile"):
+                score += 10
+                evidence.append({"type": "heuristic",
+                                 "heuristic": "pdf_embedded_files",
+                                 "points": 10,
+                                 "detail": "document embeds files"})
         cfb_result = None
         if fmt == "cfb":
             cfb_result = formats_cfb.parse_cfb(data)

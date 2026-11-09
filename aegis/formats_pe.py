@@ -104,6 +104,35 @@ def parse_pe(data: bytes) -> dict:
                     out["findings"].append(
                         {"type": "high_entropy_resource",
                          "count": len(hot)})
+        dbg = out["directories"].get("debug")
+        if dbg:
+            out["debug"] = _parse_debug(data, out["sections"], dbg["rva"])
+            if out["debug"].get("pdb_path"):
+                out["findings"].append(
+                    {"type": "pdb_path_present",
+                     "path": out["debug"]["pdb_path"]})
+        dly = out["directories"].get("delayimport")
+        if dly:
+            out["delay_imports"] = _parse_delay_imports(
+                data, out["sections"], dly["rva"],
+                out["pe_kind"] == "PE32+")
+            if out["delay_imports"]:
+                out["findings"].append(
+                    {"type": "delay_imports_present",
+                     "count": len(out["delay_imports"]),
+                     "note": "delay imports are excluded from imphash, "
+                             "matching pefile and YARA behaviour"})
+        tls = out["directories"].get("tls")
+        if tls:
+            out["tls_callbacks"] = _parse_tls_callbacks(
+                data, out["sections"], tls["rva"],
+                out["pe_kind"] == "PE32+")
+            if out["tls_callbacks"]:
+                secs = sorted({c["section"] for c in out["tls_callbacks"]})
+                out["findings"].append(
+                    {"type": "tls_callbacks_present",
+                     "count": len(out["tls_callbacks"]),
+                     "sections": secs})
         if out["overlay_bytes"] > 0:
             out["findings"].append({"type": "overlay_present",
                                     "bytes": out["overlay_bytes"]})
@@ -285,3 +314,139 @@ def _parse_resources(data: bytes, sections: list[dict],
 
     walk(base, (), 0)
     return leaves
+
+
+def _resolve_ordinal(dll: str, ordinal: int) -> str:
+    """Ordinal resolution scope, shared with the import parser:
+    only the documented Winsock subset resolves to names; every
+    other ordinal stays ord<N>, exactly as pefile and YARA do."""
+    if dll.lower() in ("ws2_32.dll", "wsock32.dll"):
+        return WS2_32_ORDINALS.get(ordinal, f"ord{ordinal}")
+    return f"ord{ordinal}"
+
+
+def _rva_off(sections: list[dict], rva: int):
+    for s in sections:
+        start = s["virtual_address"]
+        span = max(s["virtual_size"], s["raw_size"])
+        if start <= rva < start + span:
+            return s["raw_ptr"] + (rva - start)
+    return None
+
+
+def _parse_delay_imports(data: bytes, sections: list[dict],
+                         dir_rva: int, is64: bool) -> dict:
+    """Delay-load import directory: descriptors of 32 bytes,
+    terminated by an all-zero entry. Kept strictly separate from
+    the import table (and therefore from imphash)."""
+    base = _rva_off(sections, dir_rva)
+    if base is None:
+        return {}
+    out: dict[str, list[str]] = {}
+    step = 8 if is64 else 4
+    for i in range(256):
+        off = base + i * 32
+        if off + 32 > len(data):
+            break
+        fields = struct.unpack_from("<8I", data, off)
+        if all(v == 0 for v in fields):
+            break
+        name_rva, int_rva = fields[1], fields[4]  # INT is field 4
+        name_off = _rva_off(sections, name_rva)
+        if name_off is None:
+            continue
+        end = data.find(b"\x00", name_off)
+        dll = data[name_off:end].decode("ascii", "replace").lower()
+        funcs: list[str] = []
+        int_off = _rva_off(sections, int_rva)
+        if int_off is not None:
+            for j in range(4096):
+                o = int_off + j * step
+                if o + step > len(data):
+                    break
+                thunk = struct.unpack_from("<Q" if is64 else "<I",
+                                           data, o)[0]
+                if thunk == 0:
+                    break
+                if thunk & (0x8000000000000000 if is64 else 0x80000000):
+                    ordinal = thunk & 0xFFFF
+                    funcs.append(_resolve_ordinal(dll, ordinal))
+                else:
+                    noff = _rva_off(sections, thunk & 0x7FFFFFFF)
+                    if noff is not None and noff + 2 < len(data):
+                        e2 = data.find(b"\x00", noff + 2)
+                        funcs.append(data[noff + 2:e2].decode(
+                            "ascii", "replace"))
+        out[dll] = funcs
+    return out
+
+
+def _parse_debug(data: bytes, sections: list[dict], dir_rva: int) -> dict:
+    base = _rva_off(sections, dir_rva)
+    if base is None:
+        return {}
+    out: dict = {"entries": []}
+    for i in range(64):
+        off = base + i * 28
+        if off + 28 > len(data):
+            break
+        (_char, _ts, _maj, _min, dtype, size, _addr,
+         ptr) = struct.unpack_from("<IIHHIIII", data, off)
+        if dtype == 0 and size == 0:
+            break
+        entry = {"type": dtype, "size": size}
+        if dtype == 2 and ptr and ptr + size <= len(data):  # CodeView
+            blob = data[ptr:ptr + size]
+            if blob[:4] == b"RSDS" and len(blob) > 24:
+                g = struct.unpack_from("<IHH", blob, 4)
+                guid = (f"{g[0]:08x}-{g[1]:04x}-{g[2]:04x}-"
+                        + blob[12:14].hex() + "-" + blob[14:20].hex())
+                entry.update({"format": "RSDS", "guid": guid,
+                              "age": _u32(blob, 20),
+                              "pdb_path": blob[24:].split(b"\x00")[0]
+                              .decode("utf-8", "replace")})
+            elif blob[:4] == b"NB10" and len(blob) > 16:
+                entry.update({"format": "NB10",
+                              "age": _u32(blob, 12),
+                              "pdb_path": blob[16:].split(b"\x00")[0]
+                              .decode("utf-8", "replace")})
+        out["entries"].append(entry)
+        if entry.get("pdb_path"):
+            out["pdb_path"] = entry["pdb_path"]
+            out["guid"] = entry.get("guid")
+            out["age"] = entry.get("age")
+    return out
+
+
+def _parse_tls_callbacks(data: bytes, sections: list[dict],
+                         dir_rva: int, is64: bool) -> list[dict]:
+    base = _rva_off(sections, dir_rva)
+    if base is None:
+        return []
+    pe_off = _u32(data, 0x3C)
+    opt = pe_off + 4 + 20
+    image_base = struct.unpack_from("<Q" if is64 else "<I", data,
+                                    opt + (24 if is64 else 28))[0]
+    step = 8 if is64 else 4
+    if base + 4 * step > len(data):
+        return []
+    callbacks_va = struct.unpack_from("<Q" if is64 else "<I", data,
+                                      base + 3 * step)[0]
+    arr_off = _rva_off(sections, callbacks_va - image_base)
+    if arr_off is None:
+        return []
+    out: list[dict] = []
+    for i in range(64):
+        o = arr_off + i * step
+        if o + step > len(data):
+            break
+        va = struct.unpack_from("<Q" if is64 else "<I", data, o)[0]
+        if va == 0:
+            break
+        rva = va - image_base
+        section = next((s["name"] for s in sections
+                        if s["virtual_address"] <= rva
+                        < s["virtual_address"]
+                        + max(s["virtual_size"], s["raw_size"])), None)
+        out.append({"rva": rva, "section": section})
+    return out
