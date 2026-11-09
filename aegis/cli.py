@@ -31,6 +31,22 @@ def main(argv: list[str] | None = None) -> int:
                    else [engine.scan_file(target)])
         print(json.dumps(results, indent=2))
         return 0
+    if cmd == "serve":
+        from .daemon import serve
+        port = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
+        print(f"Aegis daemon on http://127.0.0.1:{port} (user-space, notify/scan only, never blocking)")
+        serve(Engine(RulePack(DEFAULT_PACK)), port=port)
+        return 0
+    if cmd == "watch":
+        from .watch import watch_directory
+        if len(sys.argv) < 3:
+            print("usage: aegis watch <directory> [seconds]")
+            return 2
+        seconds = float(sys.argv[3]) if len(sys.argv) > 3 else 30.0
+        events = watch_directory(Path(sys.argv[2]),
+                                 Engine(RulePack(DEFAULT_PACK)), seconds)
+        print(json.dumps(events, indent=2))
+        return 0
     if cmd == "lint":
         from .rulelint import lint_pack
         problems = lint_pack(DEFAULT_PACK, ROOT / "rules" / "rule_tests.json")
