@@ -1,0 +1,76 @@
+import hashlib
+import json
+import sqlite3
+from pathlib import Path
+
+from aegis.cache import VerdictCache
+from aegis.engine import Engine
+from aegis.formats_pe import parse_pe
+from aegis.rules import RulePack
+from aegis.similarity import imphash, section_hashes
+from tests.test_containers_formats import _minimal_pe
+
+ROOT = Path(__file__).resolve().parent.parent
+PACK = ROOT / "rules" / "core_rules_v2.json"
+
+
+def test_imphash_algorithm_shape():
+    analysis = {"import_functions": {
+        "KERNEL32.dll": ["CreateFileA", "WriteFile"],
+        "WS2_32.dll": ["ord23", "socket"]}}
+    expected = hashlib.md5(
+        b"kernel32.createfilea,kernel32.writefile,ws2_32.ord23,ws2_32.socket"
+    ).hexdigest()
+    assert imphash(analysis) == expected
+    assert imphash({"import_functions": {}}) is None
+    assert imphash({}) is None
+
+
+def test_section_hashes_match_raw_bytes():
+    pe = _minimal_pe()
+    analysis = parse_pe(pe)
+    hashes = section_hashes(pe, analysis)
+    section = analysis["sections"][0]
+    raw = pe[section["raw_ptr"]:section["raw_ptr"] + section["raw_size"]]
+    assert hashes[".text"] == hashlib.sha256(raw).hexdigest()
+    mutated = pe + b"overlay junk that changes the file hash"
+    assert section_hashes(mutated, parse_pe(mutated))[".text"] == hashes[".text"]
+
+
+def test_persistent_cache_roundtrip_and_invalidation(tmp_path):
+    db = tmp_path / "cache.db"
+    cache = VerdictCache(db, PACK)
+    engine = Engine(RulePack(PACK), cache=cache)
+    blob = b"some document body that is not a fixture at all"
+    first = engine.scan_bytes(blob, "doc.txt")
+    assert not first["from_cache"]
+    cache.close()
+
+    cache2 = VerdictCache(db, PACK)
+    engine2 = Engine(RulePack(PACK), cache=cache2)
+    second = engine2.scan_bytes(blob, "doc.txt")
+    assert second.get("persistent_cache") is True
+    assert second["verdict"] == first["verdict"]
+    cache2.close()
+
+    # a different pack file means a different ruleset hash: no stale verdicts
+    cache3 = VerdictCache(db, ROOT / "rules" / "core_rules.json")
+    engine3 = Engine(RulePack(ROOT / "rules" / "core_rules.json"), cache=cache3)
+    third = engine3.scan_bytes(blob, "doc.txt")
+    assert not third.get("persistent_cache")
+    cache3.close()
+
+
+def test_cache_treats_corrupt_rows_as_absent(tmp_path):
+    db = tmp_path / "cache.db"
+    cache = VerdictCache(db, PACK)
+    engine = Engine(RulePack(PACK), cache=cache)
+    blob = b"another ordinary body"
+    verdict = engine.scan_bytes(blob, "x.txt")
+    sha = verdict["hashes"]["sha256"]
+    conn = sqlite3.connect(db)
+    conn.execute("UPDATE verdicts SET verdict='not json' WHERE sha256=?", (sha,))
+    conn.commit()
+    conn.close()
+    assert cache.get(sha) is None
+    cache.close()

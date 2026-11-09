@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
+from . import similarity
 from . import segmented as segmented_mod
 from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
@@ -25,8 +26,9 @@ VERDICT_MALICIOUS = "malicious_pattern"
 
 
 class Engine:
-    def __init__(self, pack: RulePack) -> None:
+    def __init__(self, pack: RulePack, cache=None) -> None:
         self.pack = pack
+        self.persistent_cache = cache
         self.bloom = BloomFilter()
         for h in pack.known_bad:
             self.bloom.add(h)
@@ -44,6 +46,11 @@ class Engine:
             verdict = dict(self.cache[sha])
             verdict["from_cache"] = True
             return verdict
+        if self.persistent_cache is not None:
+            stored = self.persistent_cache.get(sha)
+            if stored is not None:
+                self.cache[sha] = stored
+                return dict(stored)
         fmt = formats.identify(data)
         entropy = formats.shannon_entropy(data)
         pe = formats.pe_features(data)
@@ -132,7 +139,12 @@ class Engine:
             "scan_seconds": round(time.perf_counter() - started, 6),
             "from_cache": False,
         }
+        if fmt == "pe" and analysis:
+            verdict["section_hashes"] = similarity.section_hashes(data, analysis)
+            verdict["imphash"] = similarity.imphash(analysis)
         self.cache[sha] = verdict
+        if self.persistent_cache is not None:
+            self.persistent_cache.put(sha, verdict)
         return verdict
 
     def scan_file(self, path: Path) -> dict:

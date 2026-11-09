@@ -20,6 +20,7 @@ DIRECTORIES = ["export", "import", "resource", "exception", "security",
                "loadconfig", "boundimport", "iat", "delayimport",
                "clr", "reserved"]
 CHARACTERISTICS_EXEC = 0x2000
+_IMPORT_FUNCTIONS: dict[str, list[str]] = {}
 
 
 def _u16(d: bytes, o: int) -> int:
@@ -75,13 +76,16 @@ def parse_pe(data: bytes) -> dict:
             blob = data[raw_ptr:raw_ptr + raw_size] if raw_ptr + raw_size <= len(data) else b""
             out["sections"].append({
                 "name": name, "virtual_size": vsize, "virtual_address": vaddr,
-                "raw_size": raw_size, "entropy": shannon_entropy(blob) if blob else 0.0,
+                "raw_size": raw_size, "raw_ptr": raw_ptr,
+                "entropy": shannon_entropy(blob) if blob else 0.0,
                 "executable": bool(chars & CHARACTERISTICS_EXEC)})
             sections_end = max(sections_end, raw_ptr + raw_size)
         out["overlay_bytes"] = max(0, len(data) - sections_end) if sections_end else 0
         imp = out["directories"].get("import")
         if imp:
+            _IMPORT_FUNCTIONS.clear()
             out["imports"] = _parse_imports(data, out["sections"], imp["rva"])
+            out["import_functions"] = dict(_IMPORT_FUNCTIONS)
         if out["overlay_bytes"] > 0:
             out["findings"].append({"type": "overlay_present",
                                     "bytes": out["overlay_bytes"]})
@@ -103,6 +107,22 @@ def _rva_to_off(sections: list[dict], rva: int, data_len: int) -> int | None:
             off = rva - start + (s.get("_raw_ptr") or 0)
             return off if off < data_len else None
     return None
+
+
+# Ordinal-name resolution exists ONLY for these DLLs in the
+# reference implementations (pefile, YARA); every other DLL's
+# ordinals stay ord<N>. This table is a documented subset of the
+# ws2_32 ordinal map: enough for common sockets imports, and any
+# ordinal not listed here stays ord<N> rather than being guessed.
+WS2_32_ORDINALS = {1: "accept", 2: "bind", 3: "closesocket", 4: "connect",
+                   5: "getpeername", 6: "getsockname", 7: "getsockopt",
+                   8: "htonl", 9: "htons", 10: "ioctlsocket", 11: "inet_addr",
+                   12: "inet_ntoa", 13: "ntohl", 14: "ntohs", 15: "recv",
+                   16: "recvfrom", 17: "select", 18: "send", 19: "sendto",
+                   20: "setsockopt", 21: "shutdown", 22: "socket",
+                   23: "gethostbyaddr", 24: "gethostbyname", 52: "gethostname",
+                   111: "WSAGetLastError", 115: "WSAStartup",
+                   116: "WSACleanup", 151: "WSASocketA"}
 
 
 def _parse_imports(data: bytes, sections: list[dict], imp_rva: int) -> dict:
@@ -146,8 +166,10 @@ def _parse_imports(data: bytes, sections: list[dict], imp_rva: int) -> dict:
             dll = data[name_off:end].decode("ascii", "replace") if end > 0 else "?"
             thunk_off = to_off(oft or ft)
             count = 0
+            names: list[str] = []
             if thunk_off is not None:
                 step = 8 if _u16(data, coff + 20) == 0x20B else 4
+                ordinal_flag = 1 << (63 if step == 8 else 31)
                 for j in range(4096):
                     to = thunk_off + j * step
                     if to + step > len(data):
@@ -156,7 +178,24 @@ def _parse_imports(data: bytes, sections: list[dict], imp_rva: int) -> dict:
                     if val == 0:
                         break
                     count += 1
+                    if val & ordinal_flag:
+                        ordinal = val & 0xFFFF
+                        table = (WS2_32_ORDINALS if dll.lower() in
+                                 ("ws2_32.dll", "wsock32.dll") else {})
+                        names.append(table.get(ordinal, f"ord{ordinal}"))
+                    else:
+                        name_ptr = to_off(val)
+                        if name_ptr is not None and name_ptr + 2 < len(data):
+                            end = data.find(b"\x00", name_ptr + 2)
+                            if end > 0:
+                                names.append(data[name_ptr + 2:end].decode(
+                                    "ascii", "replace"))
+                            else:
+                                names.append("?")
+                        else:
+                            names.append("?")
             imports[dll] = count
+            _IMPORT_FUNCTIONS[dll] = names
     except (struct.error, IndexError):
         return imports
     return imports
