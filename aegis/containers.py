@@ -17,6 +17,7 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import ooxml as ooxml_mod
 from .budget import BudgetExceeded, ScanBudget
 
 CHUNK = 64 * 1024
@@ -59,6 +60,7 @@ def scan_container(data: bytes, scan_bytes, budget: ScanBudget | None = None,
     try:
         if zipfile.is_zipfile(io.BytesIO(data)):
             kind = "zip"
+            ooxml_parts: dict[str, bytes] = {}
             with zipfile.ZipFile(io.BytesIO(data)) as zf:
                 for info in zf.infolist():
                     if info.is_dir():
@@ -70,8 +72,14 @@ def scan_container(data: bytes, scan_bytes, budget: ScanBudget | None = None,
                         continue
                     with zf.open(info) as fh:
                         blob = _read_bounded(fh, budget, len(data))
+                    if (info.filename == "[Content_Types].xml"
+                            or info.filename.endswith(".rels")
+                            or info.filename.rsplit("/", 1)[-1].lower()
+                            == "vbaproject.bin"):
+                        ooxml_parts[info.filename] = blob
                     result.members.append(_scan_member(
                         blob, info.filename, scan_bytes, budget, depth, result))
+            result.findings.extend(ooxml_mod.analyze_ooxml(ooxml_parts))
         elif data[:2] == b"\x1f\x8b":
             kind = "gzip"
             budget.count_file()

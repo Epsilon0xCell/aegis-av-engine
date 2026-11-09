@@ -86,6 +86,24 @@ def parse_pe(data: bytes) -> dict:
             _IMPORT_FUNCTIONS.clear()
             out["imports"] = _parse_imports(data, out["sections"], imp["rva"])
             out["import_functions"] = dict(_IMPORT_FUNCTIONS)
+        rsrc = out["directories"].get("resource")
+        if rsrc:
+            out["resources"] = _parse_resources(data, out["sections"],
+                                                 rsrc["rva"])
+            if out["resources"]:
+                out["findings"].append(
+                    {"type": "resources_present", "count": len(out["resources"])})
+                types = {r["type"] for r in out["resources"]}
+                if 16 in types:
+                    out["findings"].append({"type": "version_info_present"})
+                if 24 in types:
+                    out["findings"].append({"type": "app_manifest_present"})
+                hot = [r for r in out["resources"]
+                       if r["entropy"] > 7.2 and r["size"] > 4096]
+                if hot:
+                    out["findings"].append(
+                        {"type": "high_entropy_resource",
+                         "count": len(hot)})
         if out["overlay_bytes"] > 0:
             out["findings"].append({"type": "overlay_present",
                                     "bytes": out["overlay_bytes"]})
@@ -199,3 +217,71 @@ def _parse_imports(data: bytes, sections: list[dict], imp_rva: int) -> dict:
     except (struct.error, IndexError):
         return imports
     return imports
+
+
+RESOURCE_TYPES = {1: "cursor", 2: "bitmap", 3: "icon", 4: "menu",
+                  5: "dialog", 6: "string", 7: "fontdir", 8: "font",
+                  9: "accelerator", 10: "rcdata", 11: "messagetable",
+                  12: "group_cursor", 14: "group_icon", 16: "version",
+                  24: "manifest"}
+
+
+def _parse_resources(data: bytes, sections: list[dict],
+                     rsrc_rva: int) -> list[dict]:
+    """Walk the 3-level resource tree (type, name, language) to
+    its data entries. Bounded: at most 256 directories walked and
+    128 leaves collected, every offset bounds-checked."""
+
+    def to_off(rva: int):
+        for s in sections:
+            start = s["virtual_address"]
+            span = max(s["virtual_size"], s["raw_size"])
+            if start <= rva < start + span:
+                return s["raw_ptr"] + (rva - start)
+        return None
+
+    base = to_off(rsrc_rva)
+    if base is None:
+        return []
+    leaves: list[dict] = []
+    walked = [0]
+
+    def entries(dir_off: int):
+        if dir_off + 16 > len(data) or walked[0] > 256:
+            return []
+        walked[0] += 1
+        named, ids = _u16(data, dir_off + 12), _u16(data, dir_off + 14)
+        out = []
+        for i in range(min(named + ids, 512)):
+            e = dir_off + 16 + i * 8
+            if e + 8 > len(data):
+                break
+            out.append((_u32(data, e), _u32(data, e + 4)))
+        return out
+
+    def walk(dir_off: int, path: tuple, depth: int) -> None:
+        if len(leaves) >= 128:
+            return
+        for name_field, off_field in entries(dir_off):
+            ident = name_field & 0x7FFFFFFF
+            is_dir = bool(off_field & 0x80000000)
+            target = base + (off_field & 0x7FFFFFFF)
+            if depth < 2 and is_dir:
+                walk(target, path + (ident,), depth + 1)
+            elif depth == 2 and not is_dir:
+                if target + 16 <= len(data):
+                    drva, size = _u32(data, target), _u32(data, target + 4)
+                    doff = to_off(drva)
+                    blob = data[doff:doff + size] if doff is not None else b""
+                    if len(blob) == size:
+                        leaves.append({
+                            "type": path[0] if path else -1,
+                            "type_name": RESOURCE_TYPES.get(
+                                path[0] if path else -1, "unknown"),
+                            "name": path[1] if len(path) > 1 else -1,
+                            "language": ident, "size": size,
+                            "entropy": round(shannon_entropy(blob), 4)
+                            if blob else 0.0})
+
+    walk(base, (), 0)
+    return leaves

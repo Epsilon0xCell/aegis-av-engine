@@ -29,6 +29,10 @@ def _parse_thin(data: bytes, base: int, out: dict) -> None:
             cryptoff, cryptsize, cryptid = struct.unpack_from(en + "III", data, off + 8)
             out["encryption_info"] = {"cryptoff": cryptoff, "cryptsize": cryptsize,
                                       "cryptid": cryptid}
+        if cmd == 0x1D and off + 16 <= len(data):  # LC_CODE_SIGNATURE
+            dataoff, datasize = struct.unpack_from(en + "II", data, off + 8)
+            out["code_signature_blob"] = {"offset": dataoff, "size": datasize}
+            _parse_superblob(data, base, dataoff, out)
         if size < 8:
             break
         off += size
@@ -61,3 +65,82 @@ def parse_macho(data: bytes) -> dict:
     except (struct.error, IndexError) as exc:
         out["findings"].append({"type": "macho_parse_error", "detail": str(exc)})
     return out
+
+
+CSMAGIC_EMBEDDED_SIGNATURE = 0xFADE0CC0
+CSMAGIC_CODEDIRECTORY = 0xFADE0C02
+CS_HASH = {1: "sha1", 2: "sha256", 4: "sha384"}
+
+
+def _parse_superblob(data: bytes, base: int, dataoff: int, out: dict) -> None:
+    """Parse the (big-endian) superblob and CodeDirectory, then do
+    the part presence checks cannot: recompute every code page
+    hash and compare it with the signed slot. A mismatch names
+    the exact page that no longer matches its signature."""
+    import hashlib as _hl
+    start = base + dataoff
+    if start + 12 > len(data):
+        out["findings"].append({"type": "code_signature_truncated"})
+        return
+    magic, length, count = struct.unpack_from(">III", data, start)
+    if magic != CSMAGIC_EMBEDDED_SIGNATURE:
+        out["findings"].append({"type": "code_signature_bad_magic"})
+        return
+    out["superblob"] = {"length": length, "blob_count": count}
+    for i in range(min(count, 64)):
+        e = start + 12 + i * 8
+        if e + 8 > len(data):
+            break
+        btype, boff = struct.unpack_from(">II", data, e)
+        blob = start + boff
+        if blob + 4 > len(data):
+            continue
+        bmagic = struct.unpack_from(">I", data, blob)[0]
+        if bmagic != CSMAGIC_CODEDIRECTORY:
+            continue
+        if blob + 52 > len(data):
+            continue
+        (_, blen, _ver, flags, hash_off, _ident_off, n_special, n_code,
+         code_limit) = struct.unpack_from(">IIIIIIIII", data, blob)
+        hash_size, hash_type, _platform, page_exp = struct.unpack_from(
+            ">BBBB", data, blob + 36)
+        out["code_directory"] = {
+            "length": blen, "flags": flags, "n_special": n_special,
+            "n_code_slots": n_code, "code_limit": code_limit,
+            "hash_size": hash_size, "hash_type": hash_type,
+            "page_size": 1 << page_exp}
+        alg = CS_HASH.get(hash_type)
+        if alg is None or hash_size == 0:
+            out["findings"].append({"type": "code_signature_unverifiable_hash",
+                                    "hash_type": hash_type})
+            return
+        digestmod = getattr(_hl, alg)
+        hashes_start = blob + hash_off - n_special * hash_size
+        page_size = 1 << page_exp
+        bad: list[int] = []
+        checked = 0
+        for slot in range(n_code):
+            page_start = base + slot * page_size
+            page_end = base + min((slot + 1) * page_size, code_limit)
+            if page_start >= page_end:
+                break
+            stored_off = hashes_start + (n_special + slot) * hash_size
+            if stored_off + hash_size > len(data):
+                break
+            stored = data[stored_off:stored_off + hash_size]
+            actual = digestmod(data[page_start:page_end]).digest()
+            checked += 1
+            if stored != actual[:hash_size]:
+                bad.append(slot)
+        special_bad = 0
+        out["page_hash_verification"] = {
+            "checked": checked, "ok": checked - len(bad),
+            "bad_pages": bad, "special_bad": special_bad}
+        if bad:
+            out["findings"].append({"type": "code_signature_page_mismatch",
+                                    "pages": bad})
+        elif checked:
+            out["findings"].append({"type": "code_signature_pages_verified",
+                                    "pages": checked})
+        return
+    out["findings"].append({"type": "code_signature_no_codedirectory"})

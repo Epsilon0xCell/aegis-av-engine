@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
-from . import similarity, tlsh
+from . import authenticode, similarity, tlsh
 from . import segmented as segmented_mod
 from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
@@ -78,6 +78,14 @@ class Engine:
             analysis = formats_macho.parse_macho(data)
         for finding in analysis.get("findings", []):
             evidence.append({"type": "format_finding", **finding})
+        auth_result = None
+        if fmt == "pe":
+            auth_result = authenticode.verify_authenticode(data)
+            if auth_result.get("status") == "mismatch":
+                score += 40
+                evidence.append({"type": "authenticode_mismatch",
+                                 "points": 40,
+                                 "detail": auth_result.get("meaning", "")})
         if analysis.get("overlay_bytes"):
             score += 10
             evidence.append({"type": "heuristic", "heuristic": "overlay_data",
@@ -92,6 +100,14 @@ class Engine:
                              if m.verdict is not None]
             if member_scores:
                 score = max(score, max(member_scores))
+            if any(f.get("type") == "ooxml_remote_template"
+                   for f in container_result.findings):
+                score += 25
+                evidence.append({"type": "heuristic",
+                                 "heuristic": "ooxml_remote_template",
+                                 "points": 25,
+                                 "detail": "document fetches a remote template "
+                                           "at open time (T1221)"})
         split = views_mod.split_views(data, fmt, analysis)
         seg = segmented_mod.segmented_stats(split["loaded"])
         if entropy < 6.5 and seg["max"] >= 7.2:
@@ -140,6 +156,7 @@ class Engine:
             "from_cache": False,
         }
         verdict["tlsh"] = tlsh.tlsh_digest(data)
+        verdict["authenticode"] = auth_result
         if fmt == "pe" and analysis:
             verdict["section_hashes"] = similarity.section_hashes(data, analysis)
             verdict["imphash"] = similarity.imphash(analysis)

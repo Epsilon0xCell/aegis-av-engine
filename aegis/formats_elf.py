@@ -28,6 +28,7 @@ def parse_elf(data: bytes) -> dict:
             phoff = struct.unpack_from(en + "I", data, 28)[0]
             phentsize, phnum = struct.unpack_from(en + "HH", data, 42)
         dyn_off, dyn_filesz = None, 0
+        note_segments: list[tuple[int, int]] = []
         for i in range(min(phnum, 128)):
             o = phoff + i * phentsize
             if o + phentsize > len(data):
@@ -45,8 +46,15 @@ def parse_elf(data: bytes) -> dict:
                 out["interpreter"] = seg.split(b"\x00")[0].decode("utf-8", "replace")
             if p_type == 2:
                 dyn_off, dyn_filesz = p_off, p_filesz
+            if p_type == 4:
+                note_segments.append((p_off, p_filesz))
         if dyn_off is not None:
             out["needed"] = _dynamic_needed(data, dyn_off, dyn_filesz, is64, en, out)
+        notes = []
+        for seg_off, seg_size in note_segments:
+            notes.extend(_parse_notes(data, seg_off, seg_size, en, out))
+        if notes:
+            out["notes"] = notes
     except (struct.error, IndexError) as exc:
         out["findings"].append({"type": "elf_parse_error", "detail": str(exc)})
     return out
@@ -71,6 +79,23 @@ def _dynamic_needed(data, off, filesz, is64, en, out):
         elif tag in (DT_RPATH, DT_RUNPATH):
             out.setdefault("findings", []).append(
                 {"type": "rpath_present", "kind": "RPATH" if tag == DT_RPATH else "RUNPATH"})
+        elif tag == 30:  # DT_FLAGS
+            out.setdefault("dynamic_flags", []).append(
+                {"kind": "FLAGS", "value": val})
+            if val & 0x8:  # DF_BIND_NOW
+                out.setdefault("findings", []).append(
+                    {"type": "elf_bind_now", "detail": "full RELRO binding requested"})
+        elif tag == 0x6FFFFFFB:  # DT_FLAGS_1
+            out.setdefault("dynamic_flags", []).append(
+                {"kind": "FLAGS_1", "value": val})
+            kinds = []
+            if val & 0x1:
+                kinds.append("NOW")
+            if val & 0x8000000:
+                kinds.append("PIE")
+            if kinds:
+                out.setdefault("findings", []).append(
+                    {"type": "elf_flags_1", "kinds": kinds})
     names = []
     if strtab_off is not None:
         for no in needed_offsets:
@@ -80,3 +105,35 @@ def _dynamic_needed(data, off, filesz, is64, en, out):
                 if end > start:
                     names.append(data[start:end].decode("utf-8", "replace"))
     return names
+
+
+NT_GNU_BUILD_ID = 3
+
+
+def _parse_notes(data: bytes, off: int, size: int, en: str, out: dict) -> list[dict]:
+    """Parse ELF notes in one PT_NOTE segment. The GNU build-id
+    (NT_GNU_BUILD_ID in a note named 'GNU') is a stable content
+    fingerprint for the binary as linked: same role for ELF that
+    imphash plays for PE, and reported as one."""
+    notes: list[dict] = []
+    end = min(off + size, len(data))
+    pos = off
+    while pos + 12 <= end:
+        namesz, descsz, ntype = struct.unpack_from(en + "III", data, pos)
+        name_start = pos + 12
+        desc_start = name_start + ((namesz + 3) & ~3)
+        desc_end = desc_start + descsz
+        if desc_end > end or descsz > 4096:
+            break
+        name = data[name_start:name_start + max(namesz - 1, 0)].decode(
+            "utf-8", "replace")
+        desc = data[desc_start:desc_end]
+        entry = {"name": name, "type": ntype, "desc_size": descsz}
+        if name == "GNU" and ntype == NT_GNU_BUILD_ID:
+            entry["build_id"] = desc.hex()
+            out["build_id"] = desc.hex()
+            out.setdefault("findings", []).append(
+                {"type": "elf_build_id", "build_id": desc.hex()})
+        notes.append(entry)
+        pos = desc_start + ((descsz + 3) & ~3)
+    return notes
