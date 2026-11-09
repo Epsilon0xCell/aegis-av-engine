@@ -1,0 +1,19 @@
+{
+  "engine": "aegis@0.1.0",
+  "rule_pack": "aegis-core-fixtures",
+  "platform": "Linux-7.0.0-43-generic-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "corpus_manifest_sha256_16": "ce7c0560052079d4",
+  "files": 35,
+  "bytes": 25670,
+  "cold_scan_seconds": 0.0084,
+  "warm_scan_seconds": 0.0032,
+  "files_per_second_cold": 4165.7,
+  "megabytes_per_second_cold": 3.055,
+  "deterministic": true,
+  "fixtures_flagged_tp": 4,
+  "fixtures_missed_fn": 1,
+  "clean_flagged_fp": 0,
+  "clean_passed_tn": 30,
+  "honesty": "Axes measured by this harness on this machine and corpus only. No vendor product was run; no vendor comparison is made or implied."
+}

@@ -1,0 +1,62 @@
+{
+  "pack": "aegis-core-fixtures",
+  "version": "1.0.0",
+  "note": "Rules detect this project's SYNTHETIC fixture patterns and well-known test artifacts only. They are teaching rules for inert lab files, not a production malware signature database.",
+  "known_bad_hashes_sha256": [],
+  "rules": [
+    {
+      "id": "AEGIS-FIX-001",
+      "name": "Synthetic ransomware-pattern fixture",
+      "attck": [
+        "T1486"
+      ],
+      "patterns": [
+        "AEGIS-SYNTHETIC-RANSOMWARE-PATTERN",
+        "FAKECRYPT-LAB-v1"
+      ],
+      "min_patterns": 1,
+      "weight": 90,
+      "description": "Byte patterns that exist only in this project's inert ransomware-simulator fixtures."
+    },
+    {
+      "id": "AEGIS-FIX-002",
+      "name": "Synthetic keylogger-behaviour fixture",
+      "attck": [
+        "T1056.001"
+      ],
+      "patterns": [
+        "LAB-SYNTHETIC-KEYLOG-FIXTURE"
+      ],
+      "min_patterns": 1,
+      "weight": 90,
+      "description": "Header marker of the companion lab's zero-capture keylogger behaviour fixtures."
+    },
+    {
+      "id": "AEGIS-TEST-001",
+      "name": "EICAR antivirus test file",
+      "attck": [],
+      "patterns": [
+        "EICAR-STANDARD-ANTIVIRUS-TEST-FILE"
+      ],
+      "min_patterns": 1,
+      "weight": 100,
+      "description": "The industry-standard EICAR test string, present so any AV including this one can be smoke-tested safely."
+    },
+    {
+      "id": "AEGIS-SCRIPT-001",
+      "name": "Script dropper pattern cluster (synthetic)",
+      "attck": [
+        "T1059",
+        "T1105"
+      ],
+      "patterns": [
+        "AEGIS-SYNTH-download-cradle",
+        "AEGIS-SYNTH-hidden-window",
+        "AEGIS-SYNTH-persist-run-key"
+      ],
+      "min_patterns": 2,
+      "weight": 55,
+      "description": "Two or more synthetic dropper-pattern strings in one script fixture. Strings are inert markers invented for this project."
+    }
+  ]
+}

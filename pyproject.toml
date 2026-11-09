@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-av-engine"
+version = "0.1.0"
+description = "Aegis: an open, cross-platform, explainable antivirus scanning engine for education and research. No real malware is used anywhere in this project."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+aegis = "aegis.cli:main"
+
+[tool.setuptools]
+packages = ["aegis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
