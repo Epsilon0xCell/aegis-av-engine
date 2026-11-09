@@ -23,10 +23,10 @@ def run_benchmark(engine: Engine, corpus_root: Path, manifest: dict) -> dict:
     files = sorted(p for p in corpus_root.rglob("*")
                    if p.is_file() and p.name != "manifest.json")
     started = time.perf_counter()
-    first = {str(p.relative_to(corpus_root)): engine.scan_file(p) for p in files}
+    first = {p.relative_to(corpus_root).as_posix(): engine.scan_file(p) for p in files}
     cold_s = time.perf_counter() - started
     started = time.perf_counter()
-    second = {str(p.relative_to(corpus_root)): engine.scan_file(p) for p in files}
+    second = {p.relative_to(corpus_root).as_posix(): engine.scan_file(p) for p in files}
     warm_s = time.perf_counter() - started
     deterministic = all(first[k]["verdict"] == second[k]["verdict"]
                         and first[k]["score"] == second[k]["score"] for k in first)
