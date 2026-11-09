@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
-from . import similarity
+from . import similarity, tlsh
 from . import segmented as segmented_mod
 from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
@@ -139,6 +139,7 @@ class Engine:
             "scan_seconds": round(time.perf_counter() - started, 6),
             "from_cache": False,
         }
+        verdict["tlsh"] = tlsh.tlsh_digest(data)
         if fmt == "pe" and analysis:
             verdict["section_hashes"] = similarity.section_hashes(data, analysis)
             verdict["imphash"] = similarity.imphash(analysis)
