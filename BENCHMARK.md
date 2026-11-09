@@ -145,3 +145,36 @@ assembly stage dominating mean scan time (about 3.6 ms of
 about 4.1 ms per file on this corpus), which makes lazy
 similarity hashing the measured, not guessed, performance
 target for the v3 performance pass.
+
+## v3.0.0 release measurements (2026-11-09)
+
+Three-family sealed hold-out, each family generated from the
+fixed generators, commitment published before scoring, scored
+exactly once: family A (commitment 9a8610d902285e07...) TP 4,
+FP 0, FN 1, TN 6; family B (26a2155c95108860...) TP 4, FP 0,
+FN 1, TN 6; family C (a06f7a759bc05442...) TP 4, FP 0, FN 1,
+TN 6. The worst family is all three: identical accounting. In
+each family the single miss is the high-entropy fixture (in
+family C, zip-wrapped), the deliberate boundary documented
+since v2.0.0: unknown-format files are not convicted on
+entropy alone, because encrypted and compressed legitimate
+files are indistinguishable by that signal. The stance was
+not tuned after scoring.
+
+10,000-file benchmark, same generator and composition as the
+v2 run (9,500 clean, 500 fixtures, 10,537,934 bytes): parallel
+scan (4 workers) 5.37 s, 1,861.45 files/sec (v2: 310.46);
+single-process median 0.187 ms per file (v2: 1.445 ms), p95
+0.638 ms; peak RSS 55.1 MB. Fixture accounting identical to
+v2: 375 of 500 flagged malicious_pattern, 9,625 clean; the
+125 unflagged are the random-bytes class, as documented. The
+throughput change is attributed to the lazy-TLSH policy:
+measured standalone, the digest costs 2.3 ms per file, and
+the corpus is 95% clean files that no longer pay it. Verdicts
+on non-clean files are unchanged, digests included.
+
+Five-run small-corpus benchmark (35 files, manifest
+a9dfef5f57f34c97): cold median 3,261 files/sec (IQR 152),
+warm median 61,257 files/sec (IQR 2,341), deterministic
+across runs. Small-corpus cold rates are dominated by fixed
+costs; the 10k figures above are the release numbers.

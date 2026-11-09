@@ -1,0 +1,61 @@
+{
+ "corpus": {
+  "clean": 9500,
+  "fixture": 500
+ },
+ "files": 10000,
+ "total_bytes": 10537934,
+ "parallel_workers": 4,
+ "parallel_seconds": 5.372,
+ "parallel_files_per_sec": 1861.45,
+ "single_process_median_ms": 0.187,
+ "single_process_p95_ms": 0.638,
+ "peak_rss_mb": 55.1,
+ "slowest_10": [
+  {
+   "file": "data_07716.json",
+   "ms": 64.48
+  },
+  {
+   "file": "doc_08103.txt",
+   "ms": 61.96
+  },
+  {
+   "file": "doc_07022.txt",
+   "ms": 59.28
+  },
+  {
+   "file": "data_02286.json",
+   "ms": 59.24
+  },
+  {
+   "file": "doc_08262.txt",
+   "ms": 58.98
+  },
+  {
+   "file": "doc_00383.txt",
+   "ms": 57.68
+  },
+  {
+   "file": "doc_03454.txt",
+   "ms": 56.65
+  },
+  {
+   "file": "doc_09233.txt",
+   "ms": 56.54
+  },
+  {
+   "file": "doc_08454.txt",
+   "ms": 55.86
+  },
+  {
+   "file": "blob_03347.bin",
+   "ms": 55.43
+  }
+ ],
+ "summary_parallel": {
+  "clean": 9625,
+  "malicious_pattern": 375
+ },
+ "scope": "local run on generated corpus; see BENCHMARK.md protocol"
+}

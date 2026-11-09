@@ -85,6 +85,25 @@ exposed is documented in BENCHMARK.md rather than hidden.
 73 tests, three-OS CI, reproducible release zip with
 build-provenance attestation.
 
+## Version 3.0.0
+
+The measurement-and-coverage release. Instruments first: a
+corpus property registry, pack mutation testing, prevalence
+adjustment, and per-stage profiling. Then coverage: CFB/OLE2
+with VBA macro source recovery, PDF structural triage, PE
+delay imports, debug records and TLS callbacks, .NET metadata
+triage, and Authenticode signer identity. Then interchange
+and governance: a YARA-subset importer with loud rejection,
+per-rule false-positive budgets in CI, TUF-lite signed pack
+updates, witness-ready transparency cosignatures, and a
+CycloneDX SBOM generated from the release zip itself. The
+profile drove one performance change: TLSH, measured at
+2.3 ms per file, is computed lazily, and the 10k-corpus rate
+rose from 310 to 1,861 files per second with identical
+fixture accounting. Three sealed hold-out families each
+scored TP 4, FP 0, FN 1, TN 6, the miss being the documented
+entropy boundary. 107 tests.
+
 ## Author
 
 Gavin Blacklock (Epsilon0xCell). A solo public project: design,

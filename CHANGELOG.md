@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.0.0] - 2026-11-09
+
+### Added
+- Measurement integrity pack: corpus property registry (the v2
+  generator bug as a regression test), pack mutation score 1.0
+  over non-equivalent mutants, prevalence-adjusted reporting,
+  per-stage engine profiling.
+- CFB/OLE2 parser and MS-OVBA macro inventory with source
+  recovery; PDF structural triage (hex-escaped names, object
+  streams, action inventory); PE delay imports, debug/PDB,
+  TLS callbacks; .NET metadata triage (ECMA-335); Authenticode
+  signer identity extraction.
+- YARA-subset importer with whole-rule loud rejection;
+  per-rule false-positive budgets enforced in CI.
+- PrefixSpan mining (candidates only, type-separated from
+  detection), TUF-lite signed pack updates, witness
+  cosignatures, CycloneDX SBOM from the release zip,
+  convenience frozen binaries (spec + workflow, smoke-tested).
+
+### Changed
+- TLSH is computed lazily (non-clean verdicts or on demand);
+  measured at 2.3 ms per file standalone, it was over half the
+  scan. 10k-corpus parallel throughput rose from 310 to 1,861
+  files per second with identical fixture accounting.
+
+### Hold-out (three sealed families, each scored once)
+- Families A, B, C: TP 4, FP 0, FN 1, TN 6 each. Every miss is
+  the high-entropy fixture: the standing boundary that unknown
+  formats are not convicted on entropy alone, unchanged.
+
 All notable changes to Aegis AV Engine. Versions follow
 Semantic Versioning; the rule pack and feature set carry their
 own version strings inside verdicts.

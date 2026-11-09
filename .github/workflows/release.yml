@@ -29,7 +29,10 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: dist/*.zip
+      - name: Generate the SBOM from the built zip
+        run: |
+          python -m aegis.cli sbom "dist/aegis-av-engine-${GITHUB_REF_NAME}-source.zip" > "dist/aegis-av-engine-${GITHUB_REF_NAME}.sbom.json"
       - name: Publish release
-        run: gh release create "${GITHUB_REF_NAME}" dist/*.zip --generate-notes --title "Aegis AV Engine ${GITHUB_REF_NAME}"
+        run: gh release create "${GITHUB_REF_NAME}" dist/*.zip dist/*.sbom.json --generate-notes --title "Aegis AV Engine ${GITHUB_REF_NAME}"
         env:
           GH_TOKEN: ${{ github.token }}

@@ -5,3 +5,6 @@ benchmarks/corpus/
 benchmarks/holdout_release_1/
 benchmarks/holdout_release_2/
 benchmarks/holdout_release_3/
+benchmarks/holdout_v3_fam_a/
+benchmarks/holdout_v3_fam_b/
+benchmarks/holdout_v3_fam_c/
