@@ -13,7 +13,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from . import formats
+from . import containers, formats, formats_elf, formats_macho, formats_pe
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
 from .rules import MALICIOUS_AT, SUSPICIOUS_AT, RulePack, heuristic_score
 
@@ -59,6 +59,29 @@ class Engine:
         h_score, h_evidence = heuristic_score(fmt, entropy, len(data), pe)
         score += h_score
         evidence.extend({"type": "heuristic", **e} for e in h_evidence)
+        analysis: dict = {}
+        if fmt == "pe":
+            analysis = formats_pe.parse_pe(data)
+        elif fmt == "elf":
+            analysis = formats_elf.parse_elf(data)
+        elif fmt.startswith("macho"):
+            analysis = formats_macho.parse_macho(data)
+        for finding in analysis.get("findings", []):
+            evidence.append({"type": "format_finding", **finding})
+        if analysis.get("overlay_bytes"):
+            score += 10
+            evidence.append({"type": "heuristic", "heuristic": "overlay_data",
+                             "points": 10,
+                             "detail": f"{analysis['overlay_bytes']} bytes past the last section"})
+        container_result = None
+        if fmt == "zip_container" or data[:2] == b"\x1f\x8b":
+            container_result = containers.scan_container(data, self.scan_bytes)
+            for f in container_result.findings:
+                evidence.append({"type": "container_finding", **f})
+            member_scores = [m.verdict["score"] for m in container_result.members
+                             if m.verdict is not None]
+            if member_scores:
+                score = max(score, max(member_scores))
         fuzzy_matches = []
         fd = fuzzy_digest(data)
         for ref_name, ref_digest in self.fuzzy_refs.items():
@@ -79,6 +102,13 @@ class Engine:
             "decided_at_stage": stage, "format": fmt, "size": len(data),
             "entropy": entropy, "hashes": hashes, "fuzzy_digest": fd,
             "evidence": evidence, "rule_pack": f"{self.pack.name}@{self.pack.version}",
+            "format_analysis": analysis,
+            "container": ({"kind": container_result.kind,
+                           "members": [{"name": m.name,
+                                        "verdict": m.verdict["verdict"] if m.verdict else None,
+                                        "note": m.note} for m in container_result.members],
+                           "findings": container_result.findings}
+                          if container_result is not None else None),
             "scan_seconds": round(time.perf_counter() - started, 6),
             "from_cache": False,
         }
