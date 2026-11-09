@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
-from . import authenticode, similarity, tlsh
+from . import authenticode, formats_cfb, ovba, similarity, tlsh
 from . import segmented as segmented_mod
 from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
@@ -88,6 +88,24 @@ class Engine:
         for finding in analysis.get("findings", []):
             evidence.append({"type": "format_finding", **finding})
         mark("format_parse")
+        cfb_result = None
+        if fmt == "cfb":
+            cfb_result = formats_cfb.parse_cfb(data)
+            for finding in cfb_result.get("findings", []):
+                evidence.append({"type": "format_finding", **finding})
+            vba = ovba.analyze_vba(cfb_result)
+            cfb_result["vba"] = {k: v for k, v in vba.items()
+                                 if k != "module_sources"}
+            for finding in vba.get("findings", []):
+                evidence.append({"type": "format_finding", **finding})
+            for mod_name, source in vba.get("module_sources", {}).items():
+                for m in self.pack.match(
+                        source, {"format": "vba_source",
+                                 "entropy": formats.shannon_entropy(source),
+                                 "size": len(source)}):
+                    score += m["weight"]
+                    evidence.append({"type": "vba_rule_match",
+                                     "module": mod_name, **m})
         auth_result = None
         if fmt == "pe":
             auth_result = authenticode.verify_authenticode(data)
@@ -175,6 +193,9 @@ class Engine:
                 marks[i + 1][0]: round((marks[i + 1][1] - marks[i][1]) * 1000, 4)
                 for i in range(len(marks) - 1)}
         verdict["authenticode"] = auth_result
+        verdict["cfb"] = ({k: v for k, v in cfb_result.items()
+                           if k != "streams"}
+                          if cfb_result is not None else None)
         if fmt == "pe" and analysis:
             verdict["section_hashes"] = similarity.section_hashes(data, analysis)
             verdict["imphash"] = similarity.imphash(analysis)

@@ -11,6 +11,7 @@ import math
 import struct
 
 MAGICS = (
+    (bytes.fromhex("D0CF11E0A1B11AE1"), "cfb"),
     (b"MZ", "pe"),
     (b"\x7fELF", "elf"),
     (b"\xfe\xed\xfa\xce", " macho32".strip()),
