@@ -47,6 +47,15 @@ def main(argv: list[str] | None = None) -> int:
                                  Engine(RulePack(DEFAULT_PACK)), seconds)
         print(json.dumps(events, indent=2))
         return 0
+    if cmd == "parscan":
+        from .parscan import report_json, scan_directory
+        if len(args) < 3:
+            print("usage: aegis parscan <directory> [workers]")
+            return 2
+        workers = int(args[2]) if len(args) > 2 else 4
+        print(report_json(scan_directory(Path(args[1]), DEFAULT_PACK,
+                                         workers=workers)))
+        return 0
     if cmd == "lint":
         from .rulelint import lint_pack
         problems = lint_pack(DEFAULT_PACK, ROOT / "rules" / "rule_tests.json")
