@@ -1,0 +1,100 @@
+{
+  "calibration": "aegis-calibration@1.0.0",
+  "pairs": 35,
+  "clean_scores": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "fixture_scores": [
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "risk_coverage": [
+    {
+      "alpha": 0.02,
+      "coverage": 0.0,
+      "risk": null,
+      "answered": 0,
+      "test_n": 53
+    },
+    {
+      "alpha": 0.05,
+      "coverage": 0.0,
+      "risk": null,
+      "answered": 0,
+      "test_n": 53
+    },
+    {
+      "alpha": 0.1,
+      "coverage": 0.0,
+      "risk": null,
+      "answered": 0,
+      "test_n": 53
+    },
+    {
+      "alpha": 0.2,
+      "coverage": 0.0,
+      "risk": null,
+      "answered": 0,
+      "test_n": 53
+    },
+    {
+      "alpha": 0.3,
+      "coverage": 0.0,
+      "risk": null,
+      "answered": 0,
+      "test_n": 53
+    },
+    {
+      "alpha": 0.5,
+      "coverage": 0.0,
+      "risk": null,
+      "answered": 0,
+      "test_n": 53
+    }
+  ],
+  "ece": {
+    "ece": 0.283,
+    "bins": [
+      {
+        "bin": 0,
+        "n": 53,
+        "predicted": 0.0,
+        "observed": 0.283
+      }
+    ],
+    "note": "frequencies fitted on first half, ECE on second"
+  },
+  "scope": "self-generated corpora only; not a real-world accuracy claim"
+}
