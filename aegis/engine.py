@@ -27,7 +27,9 @@ VERDICT_MALICIOUS = "malicious_pattern"
 
 
 class Engine:
-    def __init__(self, pack: RulePack, cache=None, profile: bool = False) -> None:
+    def __init__(self, pack: RulePack, cache=None, profile: bool = False,
+                 always_tlsh: bool = False) -> None:
+        self.always_tlsh = always_tlsh
         self.pack = pack
         self.persistent_cache = cache
         self.bloom = BloomFilter()
@@ -39,6 +41,11 @@ class Engine:
 
     def register_fuzzy_reference(self, name: str, data: bytes) -> None:
         self.fuzzy_refs[name] = fuzzy_digest(data)
+
+    def tlsh_of(self, data: bytes):
+        """The TLSH digest on demand (see the lazy policy in
+        scan_bytes)."""
+        return tlsh.tlsh_digest(data)
 
     def scan_bytes(self, data: bytes, name: str = "<memory>") -> dict:
         started = time.perf_counter()
@@ -228,7 +235,17 @@ class Engine:
             "from_cache": False,
         }
         mark("similarity")
-        verdict["tlsh"] = tlsh.tlsh_digest(data)
+        # Lazy TLSH (v3 performance pass): profiling showed the
+        # digest costs about 2.3 ms per file, over half the scan,
+        # and nothing in scoring consumes it. It is computed when
+        # the verdict is at least suspicious, or on demand via
+        # Engine.tlsh_of. Skipping is recorded, never silent.
+        if score >= SUSPICIOUS_AT or self.always_tlsh:
+            verdict["tlsh"] = tlsh.tlsh_digest(data)
+        else:
+            verdict["tlsh"] = None
+            verdict["tlsh_skipped"] = (
+                "clean verdict; digest available via Engine.tlsh_of")
         if self.profile:
             marks.append(("tlsh_and_assembly", time.perf_counter()))
             verdict["profile_ms"] = {

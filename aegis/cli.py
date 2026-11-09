@@ -56,6 +56,11 @@ def main(argv: list[str] | None = None) -> int:
         print(report_json(scan_directory(Path(args[1]), DEFAULT_PACK,
                                          workers=workers)))
         return 0
+    if cmd == "sbom" and len(args) == 2:
+        from . import __version__
+        from .sbom import sbom_json
+        print(sbom_json(Path(args[1]), "aegis-av-engine", __version__))
+        return 0
     if cmd == "lint":
         from .rulelint import lint_pack
         problems = lint_pack(DEFAULT_PACK, ROOT / "rules" / "rule_tests.json")

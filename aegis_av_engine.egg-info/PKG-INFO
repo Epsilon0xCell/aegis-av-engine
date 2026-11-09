@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: aegis-av-engine
+Version: 2.0.0
+Summary: Aegis: an open, cross-platform, explainable antivirus scanning engine for education and research. No real malware is used anywhere in this project.
+Requires-Python: >=3.10
+License-File: LICENSE
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Dynamic: license-file

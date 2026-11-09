@@ -1,0 +1,39 @@
+name: aegis-binaries
+# Convenience binaries only. The canonical release artifact is
+# the attested, reproducible source zip from aegis-release;
+# these onedir builds are unsigned, not byte-reproducible, and
+# exist so a reviewer can run the engine with no Python install.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  build:
+    name: binaries-${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build onedir binary
+        run: |
+          pip install pyinstaller
+          pyinstaller --noconfirm --distpath dist-bin --workpath build-bin scripts/aegis.spec
+      - name: Smoke test the frozen binary
+        shell: bash
+        run: |
+          echo 'AEGIS-SYNTHETIC-RANSOMWARE-PATTERN' > marker.txt
+          BIN=$(find dist-bin -name 'aegis*' -type f -maxdepth 3 | head -1)
+          "$BIN" scan marker.txt | grep -q malicious_pattern
+          echo "frozen binary smoke ok: $BIN"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aegis-binaries-${{ matrix.os }}
+          path: dist-bin
