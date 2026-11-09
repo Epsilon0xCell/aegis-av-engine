@@ -126,3 +126,22 @@ RSS 53.2 MB. Fixture accounting at scale: 375 of 500 fixtures
 flagged; the 125 unflagged are exactly the random-bytes class
 named in the release-3 hold-out note. Per-OS release figures
 remain the CI-reported ones, per the protocol above.
+
+## v3 Phase 0: measurement integrity (2026-11-09)
+
+Instruments before detectors. Corpus generators now carry a
+property registry (aegis/corpus_checks.py): every generated
+file's named claim is asserted in CI, and the v2 generator bug,
+deliberately reintroduced as a constant-byte fixture, is caught
+by claim name in tests. Pack mutation testing
+(aegis/packmutate.py) reports a mutation score of 1.0 over
+non-equivalent mutants (18 killed, 0 survived, 2 documented
+equivalents: single-string all_of/any_of flips). Prevalence
+reporting (aegis/prevalence.py) restates precision at 10, 1,
+and 0.1 percent prevalence by Bayes adjustment of the same
+counts. Per-stage profiling over the generated corpora
+(benchmarks/profile_local.json) shows the TLSH and verdict
+assembly stage dominating mean scan time (about 3.6 ms of
+about 4.1 ms per file on this corpus), which makes lazy
+similarity hashing the measured, not guessed, performance
+target for the v3 performance pass.

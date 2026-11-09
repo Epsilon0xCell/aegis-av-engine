@@ -26,7 +26,7 @@ VERDICT_MALICIOUS = "malicious_pattern"
 
 
 class Engine:
-    def __init__(self, pack: RulePack, cache=None) -> None:
+    def __init__(self, pack: RulePack, cache=None, profile: bool = False) -> None:
         self.pack = pack
         self.persistent_cache = cache
         self.bloom = BloomFilter()
@@ -34,12 +34,19 @@ class Engine:
             self.bloom.add(h)
         self.cache: dict[str, dict] = {}
         self.fuzzy_refs: dict[str, str] = {}  # name -> fuzzy digest of fixtures
+        self.profile = profile
 
     def register_fuzzy_reference(self, name: str, data: bytes) -> None:
         self.fuzzy_refs[name] = fuzzy_digest(data)
 
     def scan_bytes(self, data: bytes, name: str = "<memory>") -> dict:
         started = time.perf_counter()
+        marks: list[tuple[str, float]] = [("start", started)]
+
+        def mark(stage: str) -> None:
+            if self.profile:
+                marks.append((stage, time.perf_counter()))
+
         hashes = digests(data)
         sha = hashes["sha256"]
         if sha in self.cache:
@@ -51,6 +58,7 @@ class Engine:
             if stored is not None:
                 self.cache[sha] = stored
                 return dict(stored)
+        mark("digests")
         fmt = formats.identify(data)
         entropy = formats.shannon_entropy(data)
         pe = formats.pe_features(data)
@@ -67,6 +75,7 @@ class Engine:
             score += m["weight"]
             evidence.append({"type": "rule_match", **m})
         h_score, h_evidence = heuristic_score(fmt, entropy, len(data), pe)
+        mark("rules_and_scorecard")
         score += h_score
         evidence.extend({"type": "heuristic", **e} for e in h_evidence)
         analysis: dict = {}
@@ -78,6 +87,7 @@ class Engine:
             analysis = formats_macho.parse_macho(data)
         for finding in analysis.get("findings", []):
             evidence.append({"type": "format_finding", **finding})
+        mark("format_parse")
         auth_result = None
         if fmt == "pe":
             auth_result = authenticode.verify_authenticode(data)
@@ -108,6 +118,7 @@ class Engine:
                                  "points": 25,
                                  "detail": "document fetches a remote template "
                                            "at open time (T1221)"})
+        mark("containers")
         split = views_mod.split_views(data, fmt, analysis)
         seg = segmented_mod.segmented_stats(split["loaded"])
         if entropy < 6.5 and seg["max"] >= 7.2:
@@ -122,6 +133,7 @@ class Engine:
                              "points": 15,
                              "detail": f"hottest loaded window {seg['max']:.2f} vs "
                                        f"global {entropy:.2f}"})
+        mark("views_segmented")
         fuzzy_matches = []
         fd = fuzzy_digest(data)
         for ref_name, ref_digest in self.fuzzy_refs.items():
@@ -155,7 +167,13 @@ class Engine:
             "scan_seconds": round(time.perf_counter() - started, 6),
             "from_cache": False,
         }
+        mark("similarity")
         verdict["tlsh"] = tlsh.tlsh_digest(data)
+        if self.profile:
+            marks.append(("tlsh_and_assembly", time.perf_counter()))
+            verdict["profile_ms"] = {
+                marks[i + 1][0]: round((marks[i + 1][1] - marks[i][1]) * 1000, 4)
+                for i in range(len(marks) - 1)}
         verdict["authenticode"] = auth_result
         if fmt == "pe" and analysis:
             verdict["section_hashes"] = similarity.section_hashes(data, analysis)

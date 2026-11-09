@@ -1,0 +1,13 @@
+{
+ "files": 35,
+ "mean_ms_per_stage": {
+  "digests": 0.0445,
+  "rules_and_scorecard": 0.3223,
+  "format_parse": 0.0044,
+  "containers": 0.0012,
+  "views_segmented": 0.1409,
+  "similarity": 0.0362,
+  "end": 3.6299
+ },
+ "scope": "generated corpora, local run; stage names follow the pipeline"
+}
