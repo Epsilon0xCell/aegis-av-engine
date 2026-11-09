@@ -14,7 +14,8 @@ import time
 from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
-from . import authenticode, formats_cfb, formats_pdf, ovba, similarity, tlsh
+from . import (authenticode, formats_cfb, formats_dotnet, formats_pdf,
+               ovba, similarity, tlsh)
 from . import segmented as segmented_mod
 from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
@@ -132,6 +133,22 @@ class Engine:
                     evidence.append({"type": "vba_rule_match",
                                      "module": mod_name, **m})
         auth_result = None
+        dotnet_result = None
+        if fmt == "pe" and (analysis.get("directories") or {}).get("clr"):
+            dotnet_result = formats_dotnet.parse_dotnet(data, analysis)
+            for finding in dotnet_result.get("findings", []):
+                evidence.append({"type": "format_finding", **finding})
+            joined = "\n".join(
+                dotnet_result.get("user_strings", [])).encode(
+                    "utf-8", "replace")
+            if joined:
+                for m in self.pack.match(
+                        joined, {"format": "dotnet_user_strings",
+                                 "entropy": formats.shannon_entropy(joined),
+                                 "size": len(joined)}):
+                    score += m["weight"]
+                    evidence.append({"type": "dotnet_user_string_match",
+                                     **m})
         if fmt == "pe":
             auth_result = authenticode.verify_authenticode(data)
             if auth_result.get("status") == "mismatch":
@@ -218,6 +235,7 @@ class Engine:
                 marks[i + 1][0]: round((marks[i + 1][1] - marks[i][1]) * 1000, 4)
                 for i in range(len(marks) - 1)}
         verdict["authenticode"] = auth_result
+        verdict["dotnet"] = dotnet_result
         verdict["cfb"] = ({k: v for k, v in cfb_result.items()
                            if k != "streams"}
                           if cfb_result is not None else None)

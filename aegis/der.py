@@ -79,3 +79,89 @@ def find_digest_infos(data: bytes, depth: int = 0) -> list[dict]:
             found.extend(find_digest_infos(content, depth + 1))
         off += total
     return found
+
+
+OID_SHORT = {"2.5.4.3": "CN", "2.5.4.10": "O", "2.5.4.11": "OU",
+             "2.5.4.6": "C", "2.5.4.7": "L", "2.5.4.8": "ST"}
+
+
+def _parse_name(content: bytes) -> dict:
+    """Parse an X.501 Name (the content of its SEQUENCE)."""
+    out: dict[str, str] = {}
+    for tag, set_content, _full in _iter(content):
+        if tag != 0x31:
+            continue
+        for tag2, ava, _f2 in _iter(set_content):
+            if tag2 != 0x30:
+                continue
+            parts = list(_iter(ava))
+            if len(parts) < 2:
+                continue
+            oid = _oid_str(parts[0][1])
+            raw = parts[1][1]
+            try:
+                value = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                value = raw.decode("latin-1", "replace")
+            short = OID_SHORT.get(oid, oid)
+            if short not in out:
+                out[short] = value
+    return out
+
+
+def _iter(content: bytes):
+    off = 0
+    while off < len(content):
+        tlv = read_tlv(content, off)
+        if tlv is None:
+            return
+        tag, coff, clen, total = tlv
+        yield tag, content[coff:coff + clen], content[off:off + total]
+        off += total
+
+
+def _parse_certificate(cert_content: bytes) -> dict | None:
+    parts = list(_iter(cert_content))
+    if not parts or parts[0][0] != 0x30:
+        return None
+    tbs = list(_iter(parts[0][1]))
+    if len(tbs) < 6 or tbs[0][0] != 0xA0:
+        return None
+    serial = int.from_bytes(tbs[1][1], "big") if tbs[1][0] == 0x02 else 0
+    issuer = _parse_name(tbs[3][1]) if tbs[3][0] == 0x30 else {}
+    validity = list(_iter(tbs[4][1])) if tbs[4][0] == 0x30 else []
+    times = [v[1].decode("ascii", "replace") for v in validity[:2]]
+    subject = _parse_name(tbs[5][1]) if tbs[5][0] == 0x30 else {}
+    return {"subject": subject, "issuer": issuer,
+            "serial_hex": format(serial, "x"),
+            "not_before": times[0] if times else None,
+            "not_after": times[1] if len(times) > 1 else None,
+            "meaning": "the embedded certificate NAMES this signer; "
+                       "no chain or trust evaluation is performed"}
+
+
+def find_certificates(data: bytes, depth: int = 0) -> list[dict]:
+    """Find X.509 certificates (as embedded in a PKCS#7
+    SignedData) and extract signer identity fields from the
+    TBSCertificate. Identity extraction only: no chain building,
+    no trust evaluation, by design."""
+    found: list[dict] = []
+    if depth > 10 or len(data) < 8:
+        return found
+    off = 0
+    while off < len(data):
+        tlv = read_tlv(data, off)
+        if tlv is None:
+            break
+        tag, coff, clen, total = tlv
+        content = data[coff:coff + clen]
+        if tag == 0x30:
+            cert = _parse_certificate(content)
+            if cert is not None:
+                found.append(cert)
+            else:
+                found.extend(find_certificates(content, depth + 1))
+        elif tag & 0xE0 == 0xA0 or tag == 0x31:
+            found.extend(find_certificates(content, depth + 1))
+        off += total
+    return found

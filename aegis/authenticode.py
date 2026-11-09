@@ -80,6 +80,7 @@ def verify_authenticode(data: bytes) -> dict:
         return {"status": "digest_not_extracted",
                 "image_hash_sha256": base["digest"],
                 "cert_table": cert}
+    signers = der.find_certificates(blob)
     results = []
     matched = False
     for info in infos:
@@ -92,6 +93,7 @@ def verify_authenticode(data: bytes) -> dict:
         results.append({"algorithm": info["algorithm"], "match": ok,
                         "stored": info["digest"].hex(), "computed": computed})
     return {"status": "match" if matched else "mismatch",
+            "signers": signers,
             "image_hash_sha256": base["digest"], "digests": results,
             "cert_table": cert,
             "meaning": ("bytes match what was signed" if matched else
