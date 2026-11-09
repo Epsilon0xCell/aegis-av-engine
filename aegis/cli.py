@@ -1,4 +1,4 @@
-"""Command line: aegis scan <path> | aegis benchmark | aegis demo"""
+"""Command line: aegis scan <path> | aegis benchmark | aegis demo | aegis lint"""
 from __future__ import annotations
 
 import json
@@ -11,7 +11,7 @@ from .engine import Engine
 from .rules import RulePack
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_PACK = ROOT / "rules" / "core_rules.json"
+DEFAULT_PACK = ROOT / "rules" / "core_rules_v2.json"
 
 
 def _engine() -> Engine:
@@ -31,6 +31,11 @@ def main(argv: list[str] | None = None) -> int:
                    else [engine.scan_file(target)])
         print(json.dumps(results, indent=2))
         return 0
+    if cmd == "lint":
+        from .rulelint import lint_pack
+        problems = lint_pack(DEFAULT_PACK, ROOT / "rules" / "rule_tests.json")
+        print(json.dumps({"pack": str(DEFAULT_PACK), "problems": problems}, indent=2))
+        return 1 if problems else 0
     if cmd == "demo":
         corpus = ROOT / "benchmarks" / "corpus"
         manifest = write_manifests(corpus)

@@ -52,7 +52,8 @@ class Engine:
             score = 100
             stage = "exact_hash"
             evidence.append({"type": "exact_hash", "detail": "sha256 in known-bad set"})
-        matched = self.pack.match(data)
+        matched = self.pack.match(data, {"format": fmt, "entropy": entropy,
+                                         "size": len(data)})
         for m in matched:
             score += m["weight"]
             evidence.append({"type": "rule_match", **m})

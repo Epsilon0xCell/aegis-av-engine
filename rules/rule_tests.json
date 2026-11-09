@@ -1,0 +1,10 @@
+{
+  "note": "Per-rule fixtures, enforced by the linter: every rule must have at least one positive and one negative case here, and the matcher must agree with them.",
+  "tests": [
+    {"rule_id": "AEGIS-FIX-001", "should_match": "xx AEGIS-SYNTHETIC-RANSOMWARE-PATTERN yy", "should_not_match": "ordinary document text"},
+    {"rule_id": "AEGIS-FIX-002", "should_match": "LAB-SYNTHETIC-KEYLOG-FIXTURE\ninvented", "should_not_match": "a real log file"},
+    {"rule_id": "AEGIS-TEST-001", "should_match": "X5O! EICAR-STANDARD-ANTIVIRUS-TEST-FILE! tail", "should_not_match": "a file about antivirus testing in general"},
+    {"rule_id": "AEGIS-SCRIPT-001", "should_match": "AEGIS-SYNTH-download-cradle plus AEGIS-SYNTH-hidden-window", "should_not_match": "only AEGIS-SYNTH-download-cradle alone"},
+    {"rule_id": "AEGIS-HEX-001", "should_match_hex": "4D 5A 90 00 03 00 00 00 04 00 41 45 47 49 53", "should_not_match_hex": "4D 5A 90 00 03 00", "format": "pe"}
+  ]
+}

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .rulelang import HexPattern, evaluate_condition
 from .strings_engine import AhoCorasick
 
 SUSPICIOUS_AT = 40
@@ -17,32 +18,69 @@ MALICIOUS_AT = 70
 
 
 class RulePack:
+    """Loads format-1 packs (patterns + min_patterns) and format-2
+    packs (typed strings + condition ASTs) into one runtime shape."""
+
     def __init__(self, path: Path) -> None:
         doc = json.loads(path.read_text())
         self.name = doc["pack"]
         self.version = doc["version"]
+        self.format = doc.get("format", 1)
         self.known_bad = set(doc.get("known_bad_hashes_sha256", []))
-        self.rules = doc["rules"]
+        self.rules: list[dict] = []
         self.automaton = AhoCorasick()
-        for rule in self.rules:
-            for pat in rule["patterns"]:
-                self.automaton.add(pat.encode(), rule["id"])
+        self.hex_patterns: dict[str, HexPattern] = {}
+        for rule in doc["rules"]:
+            self._load_rule(rule)
         self.automaton.build()
 
-    def match(self, data: bytes) -> list[dict]:
-        # The automaton establishes which rules hit in one pass; the
-        # per-rule distinct-pattern count below is bookkeeping for
-        # the min_patterns threshold and the evidence record.
+    def _load_rule(self, rule: dict) -> None:
+        strings = rule.get("strings")
+        if strings is None:  # format 1: convert patterns + min_patterns
+            strings = [{"id": f"$s{i}", "type": "text", "value": p}
+                       for i, p in enumerate(rule["patterns"])]
+            condition = {"count_at_least": {
+                "of": [s["id"] for s in strings],
+                "n": rule.get("min_patterns", 1)}}
+        else:
+            condition = rule["condition"]
+        compiled = {"id": rule["id"], "name": rule["name"],
+                    "attck": rule.get("attck", []), "weight": rule["weight"],
+                    "description": rule.get("description", ""),
+                    "strings": strings, "condition": condition}
+        for s in strings:
+            if s["type"] == "text":
+                self.automaton.add(s["value"].encode(),
+                                   f"{rule['id']}|{s['id']}")
+            elif s["type"] == "hex":
+                self.hex_patterns[f"{rule['id']}|{s['id']}"] = HexPattern(s["value"])
+            else:
+                raise ValueError(f"unknown string type {s['type']}")
+        self.rules.append(compiled)
+
+    def matched_string_ids(self, rule: dict, data: bytes,
+                           hits: dict[str, int]) -> set[str]:
+        matched: set[str] = set()
+        for s in rule["strings"]:
+            key = f"{rule['id']}|{s['id']}"
+            if s["type"] == "text":
+                if hits.get(key, 0):
+                    matched.add(s["id"])
+            elif self.hex_patterns[key].search(data):
+                matched.add(s["id"])
+        return matched
+
+    def match(self, data: bytes, facts: dict | None = None) -> list[dict]:
+        facts = facts or {}
         hits = self.automaton.search(data)
         matched = []
         for rule in self.rules:
-            if hits.get(rule["id"], 0) == 0:
-                continue
-            distinct = sum(1 for p in rule["patterns"] if p.encode() in data)
-            if distinct >= rule["min_patterns"]:
+            ids = self.matched_string_ids(rule, data, hits)
+            if ids and evaluate_condition(rule["condition"], ids, facts):
                 matched.append({"rule_id": rule["id"], "name": rule["name"],
                                 "attck": rule["attck"], "weight": rule["weight"],
-                                "patterns_matched": distinct,
+                                "patterns_matched": len(ids),
+                                "strings_matched": sorted(ids),
                                 "description": rule["description"]})
         return matched
 

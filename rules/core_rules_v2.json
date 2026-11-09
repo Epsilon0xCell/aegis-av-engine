@@ -1,0 +1,47 @@
+{
+  "pack": "aegis-core-fixtures",
+  "version": "2.0.0",
+  "format": 2,
+  "note": "Rules detect this project's SYNTHETIC fixture patterns and well-known test artifacts only. Teaching rules for inert lab files, not a production malware signature database.",
+  "known_bad_hashes_sha256": [],
+  "rules": [
+    {
+      "id": "AEGIS-FIX-001", "name": "Synthetic ransomware-pattern fixture",
+      "attck": ["T1486"], "weight": 90,
+      "strings": [{"id": "$a", "type": "text", "value": "AEGIS-SYNTHETIC-RANSOMWARE-PATTERN"},
+                  {"id": "$b", "type": "text", "value": "FAKECRYPT-LAB-v1"}],
+      "condition": {"any_of": ["$a", "$b"]},
+      "description": "Byte patterns that exist only in this project's inert ransomware-simulator fixtures."
+    },
+    {
+      "id": "AEGIS-FIX-002", "name": "Synthetic keylogger-behaviour fixture",
+      "attck": ["T1056.001"], "weight": 90,
+      "strings": [{"id": "$a", "type": "text", "value": "LAB-SYNTHETIC-KEYLOG-FIXTURE"}],
+      "condition": {"all_of": ["$a"]},
+      "description": "Header marker of the companion lab's zero-capture keylogger behaviour fixtures."
+    },
+    {
+      "id": "AEGIS-TEST-001", "name": "EICAR antivirus test file",
+      "attck": [], "weight": 100,
+      "strings": [{"id": "$a", "type": "text", "value": "EICAR-STANDARD-ANTIVIRUS-TEST-FILE"}],
+      "condition": {"all_of": ["$a"]},
+      "description": "The industry-standard EICAR test string, present so any AV including this one can be smoke-tested safely."
+    },
+    {
+      "id": "AEGIS-SCRIPT-001", "name": "Script dropper pattern cluster (synthetic)",
+      "attck": ["T1059", "T1105"], "weight": 55,
+      "strings": [{"id": "$a", "type": "text", "value": "AEGIS-SYNTH-download-cradle"},
+                  {"id": "$b", "type": "text", "value": "AEGIS-SYNTH-hidden-window"},
+                  {"id": "$c", "type": "text", "value": "AEGIS-SYNTH-persist-run-key"}],
+      "condition": {"count_at_least": {"of": ["$a", "$b", "$c"], "n": 2}},
+      "description": "Two or more synthetic dropper-pattern strings in one script fixture. Strings are inert markers invented for this project."
+    },
+    {
+      "id": "AEGIS-HEX-001", "name": "Synthetic PE fixture header pattern",
+      "attck": ["T1027"], "weight": 45,
+      "strings": [{"id": "$mz", "type": "hex", "value": "4D 5A ?? ?? ?? ?? ?? ?? ?? ?? 41 45 47 49 53"}],
+      "condition": {"and": [{"all_of": ["$mz"]}, {"format_is": "pe"}]},
+      "description": "Hex pattern with wildcards: an MZ header followed within the first bytes by the synthetic AEGIS marker, in a PE-format file. Demonstrates hex matching and format-gated conditions on an inert fixture pattern."
+    }
+  ]
+}
