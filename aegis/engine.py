@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
+from . import segmented as segmented_mod
+from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
 from .rules import MALICIOUS_AT, SUSPICIOUS_AT, RulePack, heuristic_score
 
@@ -83,6 +85,20 @@ class Engine:
                              if m.verdict is not None]
             if member_scores:
                 score = max(score, max(member_scores))
+        split = views_mod.split_views(data, fmt, analysis)
+        seg = segmented_mod.segmented_stats(split["loaded"])
+        if entropy < 6.5 and seg["max"] >= 7.2:
+            score += 45
+            evidence.append({"type": "heuristic", "heuristic": "entropy_dilution",
+                             "points": 45,
+                             "detail": f"global entropy {entropy:.2f} hides a loaded "
+                                       f"window at {seg['max']:.2f}: padding dilution"})
+        elif entropy < 7.2 and seg["max"] >= 7.8:
+            score += 15
+            evidence.append({"type": "heuristic", "heuristic": "segmented_entropy_peak",
+                             "points": 15,
+                             "detail": f"hottest loaded window {seg['max']:.2f} vs "
+                                       f"global {entropy:.2f}"})
         fuzzy_matches = []
         fd = fuzzy_digest(data)
         for ref_name, ref_digest in self.fuzzy_refs.items():
@@ -110,6 +126,9 @@ class Engine:
                                         "note": m.note} for m in container_result.members],
                            "findings": container_result.findings}
                           if container_result is not None else None),
+            "segmented_entropy": seg,
+            "views": {"loaded_fraction": split["loaded_fraction"],
+                      "residual_bytes": len(split["residual"])},
             "scan_seconds": round(time.perf_counter() - started, 6),
             "from_cache": False,
         }
@@ -118,6 +137,72 @@ class Engine:
 
     def scan_file(self, path: Path) -> dict:
         return self.scan_bytes(path.read_bytes(), name=str(path))
+
+    def scan_stream(self, path: Path, chunk_size: int = 65536) -> dict:
+        """Streaming scan for files too large to hold comfortably:
+        incremental hashes, incremental Aho-Corasick (state is one
+        integer carried across chunks), and streaming windowed
+        entropy. Text-pattern rules and the dilution heuristic are
+        evaluated; hex-pattern rules and deep parsing are not, and
+        the verdict says so plainly. Verdicts on ordinary files are
+        equivalence-tested against the in-memory path."""
+        import hashlib as _hl
+
+        from . import segmented as _seg
+        sha, md5 = _hl.sha256(), _hl.md5()
+        tracker = _seg.WindowEntropyTracker()
+        state = 0
+        hits: dict[str, int] = {}
+        size = 0
+        head = b""
+        with path.open("rb") as fh:
+            while True:
+                chunk = fh.read(chunk_size)
+                if not chunk:
+                    break
+                if not head:
+                    head = chunk[:512]
+                size += len(chunk)
+                sha.update(chunk)
+                md5.update(chunk)
+                tracker.feed(chunk)
+                delta, state = self.pack.automaton.feed(state, chunk)
+                for tag, n in delta.items():
+                    hits[tag] = hits.get(tag, 0) + n
+        fmt = formats.identify(head)
+        seg = tracker.finish()
+        evidence: list[dict] = [{"type": "stream_note",
+                                 "detail": "streaming mode: hex-pattern rules "
+                                           "and deep parsing not evaluated"}]
+        score = 0
+        for rule in self.pack.rules:
+            ids = self.pack.matched_string_ids(rule, b"", hits) \
+                if all(s["type"] == "text" for s in rule["strings"]) else set()
+            from .rulelang import evaluate_condition
+            if ids and evaluate_condition(rule["condition"], ids,
+                                          {"format": fmt, "entropy": seg["max"],
+                                           "size": size}):
+                score += rule["weight"]
+                evidence.append({"type": "rule_match", "rule_id": rule["id"],
+                                 "name": rule["name"], "attck": rule["attck"],
+                                 "weight": rule["weight"],
+                                 "patterns_matched": len(ids),
+                                 "strings_matched": sorted(ids),
+                                 "description": rule["description"]})
+        if seg["mean"] < 6.5 and seg["max"] >= 7.2:
+            score += 45
+            evidence.append({"type": "heuristic", "heuristic": "entropy_dilution",
+                             "points": 45,
+                             "detail": "streamed window maximum contradicts "
+                                       "the diluted mean"})
+        label = (VERDICT_MALICIOUS if score >= MALICIOUS_AT
+                 else VERDICT_SUSPICIOUS if score >= SUSPICIOUS_AT
+                 else VERDICT_CLEAN)
+        return {"file": str(path), "verdict": label, "score": score,
+                "mode": "streaming", "format": fmt, "size": size,
+                "hashes": {"sha256": sha.hexdigest(), "md5": md5.hexdigest()},
+                "segmented_entropy": seg, "evidence": evidence,
+                "rule_pack": f"{self.pack.name}@{self.pack.version}"}
 
     def scan_tree(self, root: Path) -> list[dict]:
         return [self.scan_file(p) for p in sorted(root.rglob("*")) if p.is_file()]

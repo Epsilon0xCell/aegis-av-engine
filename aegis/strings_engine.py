@@ -60,6 +60,21 @@ class AhoCorasick:
                 hits[tag] = hits.get(tag, 0) + 1
         return hits
 
+    def feed(self, state: int, chunk: bytes) -> tuple[dict[str, int], int]:
+        """Incremental search: carry the automaton state across
+        chunks. Hits are identical to search() over the concatenated
+        stream for ANY chunking, because the state is one integer;
+        the equivalence is property-tested in the suite."""
+        hits: dict[str, int] = {}
+        node = state
+        for byte in chunk:
+            while node and byte not in self.goto[node]:
+                node = self.fail[node]
+            node = self.goto[node].get(byte, 0)
+            for tag in self.out[node]:
+                hits[tag] = hits.get(tag, 0) + 1
+        return hits, node
+
     @property
     def state_count(self) -> int:
         return len(self.goto)
