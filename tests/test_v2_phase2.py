@@ -62,3 +62,26 @@ def test_end_to_end_generated_corpora(tmp_path):
     assert result["band"] in ("confident_clean", "abstain_ambiguous",
                               "abstain_novel")
     assert result["ceiling"] == "suspicious"
+
+
+def test_calibration_corpus_scores_are_not_degenerate(tmp_path):
+    # regression: the first published calibration artifact was
+    # degenerate because signature fixtures all score 0 under a
+    # structural scoring module. The structural corpus must spread.
+    from aegis.calibration import generate_calibration_corpus
+    generate_calibration_corpus(tmp_path)
+    engine = Engine(RulePack(ROOT / "rules" / "core_rules_v2.json"))
+    pairs = build_calibration_pairs(engine, tmp_path / "clean",
+                                    tmp_path / "fixture_like")
+    scores = [s for s, _ in pairs]
+    assert len(set(scores)) >= 5
+    assert max(s for s, m in pairs if m) > max(s for s, m in pairs if not m)
+
+
+def test_risk_coverage_handles_class_grouped_pairs():
+    # pairs arrive grouped by class from build_calibration_pairs;
+    # a positional split once made the fit half single-class
+    pairs = ([(s, False) for s in (0, 0, 3, 6, 0, 3)]
+             + [(s, True) for s in (30, 47, 57, 57, 12, 53)])
+    curve = risk_coverage(pairs)
+    assert curve and all("coverage" in row for row in curve)

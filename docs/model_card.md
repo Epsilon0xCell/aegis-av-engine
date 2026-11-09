@@ -15,7 +15,9 @@ abstain_ambiguous (the score sits in the class overlap) and
 abstain_novel (the score sits outside the calibration data
 entirely). Performance is reported as a risk-coverage curve and
 a held-out-half ECE in benchmarks/calibration_local.json, over
-this project's generated corpora only. The calibration inherits
+this project's generated structural calibration corpus only
+(see aegis/calibration.py generate_calibration_corpus: labelled
+structural traits, not malware and not real benign software). The calibration inherits
 every limit above: it calibrates the module against generated
 data, not against the world, and the module's ceiling remains
 suspicious regardless of band.

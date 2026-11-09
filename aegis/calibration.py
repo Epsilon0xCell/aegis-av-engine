@@ -89,6 +89,21 @@ class Calibration:
                 "calibration_n": self.n}
 
 
+def _stratified_split(pairs: list[tuple[int, bool]]):
+    """Deterministic split that keeps both classes and the full
+    score range in both halves: sort within class, even positions
+    to fit, odd to test. A positional split is a real bug here:
+    pair lists arrive grouped by class, so half the data can be
+    single-class."""
+    fit: list[tuple[int, bool]] = []
+    test: list[tuple[int, bool]] = []
+    for label in (False, True):
+        group = sorted(s for s, m in pairs if m == label)
+        for i, s in enumerate(group):
+            (fit if i % 2 == 0 else test).append((s, label))
+    return fit, test
+
+
 def risk_coverage(pairs: list[tuple[int, bool]],
                   alphas: tuple[float, ...] = (0.02, 0.05, 0.1, 0.2, 0.3, 0.5)
                   ) -> list[dict]:
@@ -99,8 +114,7 @@ def risk_coverage(pairs: list[tuple[int, bool]],
     Coverage is the fraction answered; risk is the error rate
     among the answered."""
     curve = []
-    half = len(pairs) // 2
-    fit, test = pairs[:half], pairs[half:]
+    fit, test = _stratified_split(pairs)
     if not fit or not test:
         return curve
     calib = Calibration(fit)
@@ -125,8 +139,7 @@ def ece_report(pairs: list[tuple[int, bool]], bins: int = 5) -> dict:
     """Expected calibration error of binned empirical frequencies,
     fitted on the first half and measured on the second half, so
     the number is not the fit grading itself."""
-    half = len(pairs) // 2
-    fit, test = sorted(pairs)[:half], sorted(pairs)[half:]
+    fit, test = _stratified_split(pairs)
     if not fit or not test:
         return {"ece": None, "note": "not enough pairs"}
     lo = min(s for s, _ in pairs)
@@ -184,3 +197,89 @@ def build_calibration_pairs(engine, clean_dir, fixture_dir) -> list[tuple[int, b
                 if result is not None:
                     pairs.append((result["score"], is_mal))
     return pairs
+
+
+# --- calibration corpus: structural samples with known labels ---
+
+def _cal_pe(rng, *, timestamp: int, section_blob: bytes,
+            overlay: bytes = b"") -> bytes:
+    """Minimal PE32: one .text section. Enough for the engine's
+    own parser and the scoring features."""
+    import struct as _s
+    pe_off = 0x80
+    nsec = 1
+    opt_size = 0xE0
+    headers = bytearray(pe_off + 4 + 20 + opt_size + nsec * 40)
+    headers[0:2] = b"MZ"
+    _s.pack_into("<I", headers, 0x3C, pe_off)
+    headers[pe_off:pe_off + 4] = b"PE\x00\x00"
+    coff = pe_off + 4
+    _s.pack_into("<HHIIIHH", headers, coff, 0x14C, nsec, timestamp, 0, 0,
+                 opt_size, 0x0102)
+    opt = coff + 20
+    _s.pack_into("<H", headers, opt, 0x10B)
+    sec = opt + opt_size
+    headers[sec:sec + 8] = b".text\x00\x00\x00"
+    _s.pack_into("<IIII", headers, sec + 8, len(section_blob), 0x1000,
+                 len(section_blob), 0x1000)
+    _s.pack_into("<I", headers, sec + 36, 0x60000020)  # code | exec | read
+    return bytes(headers) + section_blob + overlay
+
+
+def generate_calibration_corpus(root) -> dict:
+    """Labelled structural samples for calibration. The labels
+    mean exactly this: 'clean' files are built to exhibit none of
+    the scoring module's suspicious structural traits, and
+    'fixture_like' files are built to exhibit them (high entropy,
+    overlays, zero timestamps, diluted entropy). They are not
+    malware and not real benign software; they calibrate the
+    score's behaviour on structural traits, nothing more."""
+    import random as _r
+    import zipfile
+    from pathlib import Path as _P
+    root = _P(root)
+    clean, fixt = root / "clean", root / "fixture_like"
+    clean.mkdir(parents=True, exist_ok=True)
+    fixt.mkdir(parents=True, exist_ok=True)
+    rng = _r.Random(20261110)
+    manifest = {"clean": [], "fixture_like": []}
+    for i in range(4):
+        name = f"text_{i}.txt"
+        (clean / name).write_bytes(
+            (f"Meeting notes and ordinary prose, sample {i}. " * 40).encode())
+        manifest["clean"].append(name)
+    for i in range(3):
+        name = f"structured_{i}.json"
+        (clean / name).write_bytes(
+            ('{"sample": %d, "values": [1, 2, 3], "ok": true}' % i).encode() * 20)
+        manifest["clean"].append(name)
+    for i in range(3):
+        name = f"archive_{i}.zip"
+        with zipfile.ZipFile(clean / name, "w") as z:
+            for m in range(3):
+                z.writestr(f"member_{m}.txt", "ordinary member content")
+        manifest["clean"].append(name)
+    for i in range(2):
+        name = f"plain_{i}.exe"
+        (clean / name).write_bytes(_cal_pe(
+            rng, timestamp=0x5E2A5A00, section_blob=bytes(512)))
+        manifest["clean"].append(name)
+    for i in range(4):
+        name = f"blob_{i}.bin"
+        blob = bytes(rng.randrange(256) for _ in range(4096))
+        (fixt / name).write_bytes(blob)
+        manifest["fixture_like"].append(name)
+    for i in range(4):
+        name = f"diluted_{i}.bin"
+        blob = bytes(rng.randrange(256) for _ in range(2048))
+        blob += b"ordinary filler prose to dilute the average. " * (30 * (i + 1))
+        (fixt / name).write_bytes(blob)
+        manifest["fixture_like"].append(name)
+    for i in range(4):
+        name = f"packed_{i}.exe"
+        section = bytes(rng.randrange(256) for _ in range(1024))
+        overlay = bytes(rng.randrange(256) for _ in range(512 * (i + 1)))
+        (fixt / name).write_bytes(_cal_pe(
+            rng, timestamp=0, section_blob=section, overlay=overlay))
+        manifest["fixture_like"].append(name)
+    return manifest
