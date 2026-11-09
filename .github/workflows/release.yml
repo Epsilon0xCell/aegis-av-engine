@@ -1,0 +1,35 @@
+name: aegis-release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test
+        run: |
+          pip install -e ".[dev]"
+          pytest -q
+      - name: Reproducible build, twice
+        run: |
+          python scripts/make_release_zip.py dist/a.zip
+          python scripts/make_release_zip.py dist/b.zip
+          cmp dist/a.zip dist/b.zip
+          mv dist/a.zip "dist/aegis-av-engine-${GITHUB_REF_NAME}-source.zip"
+          rm dist/b.zip
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.zip
+      - name: Publish release
+        run: gh release create "${GITHUB_REF_NAME}" dist/*.zip --generate-notes --title "Aegis AV Engine ${GITHUB_REF_NAME}"
+        env:
+          GH_TOKEN: ${{ github.token }}

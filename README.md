@@ -64,6 +64,27 @@ this repository, in its tests, or in its history.
 `aegis demo` generates the corpora and prints a labelled benchmark
 report; `aegis benchmark` also writes benchmarks/results_local.json.
 
+## Version 2.0.0
+
+The sophistication release. Detection now separates what a file
+IS from what was appended to it (loaded versus residual views,
+segmented entropy, an anti-dilution heuristic, streaming
+scans), identifies files the way analysts do (section hashes,
+imphash, TLSH, ELF build-ids), verifies signatures by
+recomputation rather than presence (Authenticode image hash
+against the stored digest, Mach-O page hashes against their
+signed slots), reads documents' external relationships
+(OOXML, T1221), calibrates its scoring module with conformal
+abstention and a published risk-coverage curve, scores
+behavioural chains with partial credit, imports a loudly
+bounded Sigma subset, keeps pack history in a Merkle
+transparency log, and scans directories in parallel with
+byte-identical reports at any worker count. Two hold-out sets
+were scored under the protocol; a corpus generator bug they
+exposed is documented in BENCHMARK.md rather than hidden.
+73 tests, three-OS CI, reproducible release zip with
+build-provenance attestation.
+
 ## Author
 
 Gavin Blacklock (Epsilon0xCell). A solo public project: design,

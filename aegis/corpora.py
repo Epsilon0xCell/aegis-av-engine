@@ -42,6 +42,7 @@ def make_clean_corpus(root: Path, variants: int = 4) -> dict:
 
 def make_fixture_corpus(root: Path) -> dict:
     root.mkdir(parents=True, exist_ok=True)
+    _fixture_rng = random.Random(3)
     fixtures = {
         "fixture_ransomware_pattern.bin":
             b"INERT FIXTURE\nAEGIS-SYNTHETIC-RANSOMWARE-PATTERN\n" + b"A" * 256,
@@ -50,8 +51,14 @@ def make_fixture_corpus(root: Path) -> dict:
         "fixture_script_dropper.ps1":
             ("# inert fixture\nAEGIS-SYNTH-download-cradle\n"
              "AEGIS-SYNTH-hidden-window\nAEGIS-SYNTH-persist-run-key\n").encode(),
-        "fixture_high_entropy.bin": bytes(random.Random(3).randrange(256)
-                                          for _ in range(4096)),
+        # NOTE: the Random instance must live OUTSIDE the
+        # generator. The original code constructed Random(3)
+        # per byte, so every byte was the same first value and
+        # the "high entropy" fixture had entropy 0.0. It shipped
+        # that way through v1.0.0 and two hold-out sets; the
+        # release-2 hold-out root-cause analysis caught it.
+        "fixture_high_entropy.bin": bytes(
+            _fixture_rng.randrange(256) for _ in range(4096)),
         "eicar_test_file.txt": EICAR.encode(),
     }
     manifest = {}

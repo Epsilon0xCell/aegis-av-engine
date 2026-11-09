@@ -10,6 +10,8 @@ is explicitly out of scope (see research §8).
 """
 from __future__ import annotations
 
+from . import __version__
+
 import json
 import uuid
 from pathlib import Path
@@ -77,5 +79,5 @@ def sarif_log(verdicts: list[dict]) -> dict:
     return {"version": "2.1.0",
             "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
             "runs": [{"tool": {"driver": {"name": "Aegis AV Engine",
-                                          "version": "1.0.0"}},
+                                          "version": __version__}},
                       "results": results}]}

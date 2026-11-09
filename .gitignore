@@ -3,3 +3,5 @@ __pycache__/
 benchmarks/corpus/
 
 benchmarks/holdout_release_1/
+benchmarks/holdout_release_2/
+benchmarks/holdout_release_3/
