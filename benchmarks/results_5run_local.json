@@ -1,0 +1,11 @@
+{
+  "corpus_manifest_sha256": "b8698d1fe9d34729",
+  "files": 36,
+  "runs": 5,
+  "cold_files_per_sec_median": 4567.32,
+  "cold_files_per_sec_iqr": 13.91,
+  "warm_files_per_sec_median": 67139.75,
+  "warm_files_per_sec_iqr": 105.3,
+  "deterministic_across_runs": true,
+  "protocol": "5+ runs, median and IQR, cold (fresh engine, cold cache) and warm (cache hot) reported separately, per-OS, never averaged across operating systems"
+}

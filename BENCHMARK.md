@@ -51,3 +51,30 @@ is documented, not hidden: a file of pure random bytes matches no
 signature and, as an unknown binary type, draws no heuristic score.
 That miss is the honest price of a transparent scorecard, and it is
 recorded here so the number can only move by improving the engine.
+
+## Release benchmark (v1.0.0, local, Linux)
+
+Protocol applied as written above: 5 runs, median and IQR, cold
+and warm separate, corpus identified by manifest hash.
+
+- Corpus manifest SHA-256 (16): `b8698d1fe9d34729`, 36 files
+- Cold (fresh engine each run): median 4567.32 files/sec, IQR 13.91
+- Warm (verdict cache hot): median 67139.75 files/sec, IQR 105.3
+- Deterministic across runs: true
+- Machine: the author's Linux development VM; per-OS figures are
+  reported separately and never averaged (CI runs the suite on
+  Ubuntu, macOS and Windows; a per-OS release benchmark table is
+  future work, stated as such rather than filled in).
+
+## Sealed hold-out result (release 1, scored exactly once)
+
+- Commitment: `f1880c8271d7b5003141deb0a8cd6e18c9c321844b0e0c53bbec7036ee6d37c0`
+- TP 4, FP 0, FN 1, TN 6 (11 files: mutated fixtures and clean files)
+- The one false negative, published verbatim per protocol:
+  `holdout_160326_fixture_high_entropy.bin`. Cause: the mutation
+  padded the random-bytes fixture with printable text, diluting
+  its entropy below the scorecard threshold, and it carries no
+  signature. The pure random-bytes fixture was already the
+  documented v0.1 miss; this confirms the weakness class rather
+  than hiding it. This set is now demoted to the tuning corpus; a
+  fresh sealed set will be generated for the next release.

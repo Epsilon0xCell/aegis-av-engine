@@ -8,4 +8,4 @@ files and synthetic inert fixtures only (no real malware, ever),
 and public benchmark claims cover only axes this project measured
 itself (see BENCHMARK.md).
 """
-__version__ = "0.1.0"
+__version__ = "1.0.0"

@@ -1,5 +1,18 @@
 # Aegis AV Engine
 
+**Version 1.0.0.** What grew since 0.1.0, each subsystem tested
+and documented: safe container scanning under one shared budget,
+deep PE/ELF/Mach-O parsers, a rule language with hex patterns and
+condition ASTs plus a pack linter with per-rule fixtures, signed
+rule packs (pure-Python Ed25519 verified against the RFC 8032
+vectors) with rollback protection, a loopback daemon API and a
+notify-only watch mode (user-space: scanning and notification,
+never blocking), an explainable integer scoring module that is
+off by default and capped at suspicious, Navigator/STIX/SARIF
+exports, a sealed hold-out protocol with its first result
+published verbatim in BENCHMARK.md (including the miss), and a
+5-run median/IQR release benchmark. 37 tests, three-OS CI.
+
 An open, cross-platform antivirus scanning and analysis engine for
 education and research, by Gavin Blacklock (Epsilon0xCell).
 
