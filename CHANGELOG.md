@@ -1,5 +1,43 @@
 # Changelog
 
+## [4.0.0] - 2026-11-09
+
+### Added
+- Parser fuzzing round 2 (field-aware mutator, zero crashes over
+  the campaign) and per-parser constant-mutation scores in the
+  test suite, with the PDF module's low score published and
+  covered by boundary tests instead of a lowered floor.
+- ClamAV differential harness (Mode A: equal-knowledge custom
+  database, per-string hits through Aegis's conditions, named
+  disagreement buckets, unexplained == 0 gate). Verified end to
+  end against a contract stub; a real-clamscan run is pending
+  an environment that has one, and the harness says so.
+- Script deobfuscation-lite: bounded pure transforms (Base64,
+  UTF-16LE EncodedCommand form, [char] arrays, Chr() chains,
+  concatenation, backticks, hex escapes) with every recovered
+  layer re-matched; encoding alone never scores.
+- Delivery formats: LNK (arguments handed to the script
+  analyser), EML/MIME attachments sub-scanned, RTF objdata
+  extraction and sub-scan, ISO 9660 + Joliet member scanning.
+- Streaming hex parity: hex rules evaluated exactly in
+  scan_stream via bounded carry windows; a first-chunk format
+  identification bug at tiny chunk sizes found and fixed.
+- Delivery rule pack under full lint, FP-budget, and mutation
+  discipline (score 1.0); daemon hardening (constant-time
+  token comparison, 16 MiB body cap, JSONL audit log);
+  single-file escaped HTML reports via `aegis report`.
+
+### Measured
+- Hold-out families A/B/C (seeds 20270101-3), each scored
+  exactly once: TP 4, FP 0, FN 1, TN 6 per family; every miss
+  is the high-entropy fixture, the standing entropy boundary.
+- 10k corpus: 1,280 files/sec parallel (v3: 1,861), single
+  process median 0.36 ms per file. The slowdown is the v4
+  per-file script-layer analysis on a text-heavy corpus and
+  is reported, not hidden. Fixture accounting identical:
+  375 of 500 flagged, the 125 unflagged exactly the
+  random-bytes class.
+
 ## [3.0.0] - 2026-11-09
 
 ### Added

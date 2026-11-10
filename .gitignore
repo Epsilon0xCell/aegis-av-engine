@@ -8,3 +8,6 @@ benchmarks/holdout_release_3/
 benchmarks/holdout_v3_fam_a/
 benchmarks/holdout_v3_fam_b/
 benchmarks/holdout_v3_fam_c/
+benchmarks/holdout_v4_a/
+benchmarks/holdout_v4_b/
+benchmarks/holdout_v4_c/

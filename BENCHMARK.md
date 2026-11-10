@@ -178,3 +178,46 @@ a9dfef5f57f34c97): cold median 3,261 files/sec (IQR 152),
 warm median 61,257 files/sec (IQR 2,341), deterministic
 across runs. Small-corpus cold rates are dominated by fixed
 costs; the 10k figures above are the release numbers.
+
+## Aegis v4.0.0 release measurements (2026-11-09)
+
+### Sealed hold-out, three families, scored exactly once each
+
+| family | seed | commitment (prefix) | TP | FP | FN | TN |
+|---|---|---|---|---|---|---|
+| A | 20270101 | 8f378756e95f05bc | 4 | 0 | 1 | 6 |
+| B | 20270102 | bd4bf56d9612be9b | 4 | 0 | 1 | 6 |
+| C | 20270103 | fcc69a720230b520 | 4 | 0 | 1 | 6 |
+
+Every miss is the high-entropy fixture (one zip-wrapped):
+unknown-format files are not convicted on entropy alone, the
+standing boundary, unchanged since v2 and not tuned after
+scoring. Full results: benchmarks/holdout_v4_*_results.json.
+
+### 10,000-file corpus (same generator seed and composition as v2/v3)
+
+Parallel (4 workers): 7.81 s, 1,280 files/sec (v3 measured
+1,861 on the same corpus). Single process: median 0.36 ms per
+file (v3: 0.187), p95 1.21 ms, peak RSS 60.2 MB. Fixture
+accounting identical to v2 and v3: 375 of 500 flagged, 9,625
+clean; the 125 unflagged are exactly the random-bytes class.
+The throughput decrease is attributed, not hidden: v4 runs
+script-layer analysis on every text-shaped file and this
+corpus is text-heavy. Cross-version comparisons are valid here
+because the corpus is seed-identical; the BENCHMARK protocol's
+conditions are otherwise unchanged.
+
+Five-run small corpus (36 files, manifest b8698d1fe9d34729):
+cold median 2,042 files/sec (IQR 117), warm median 48,747
+(IQR 4,101), deterministic across runs.
+
+### ClamAV differential (Mode A)
+
+The converted database is generated and the full pipeline is
+verified against a stub honouring clamscan's output contract
+(agree_detect and agree_clean buckets populated, unexplained
+0). clamscan is not installed in the build environment, so no
+real-engine comparison is claimed for v4.0.0; the first real
+run is a release-checklist item for an environment that has
+ClamAV, and the harness reports unavailable status honestly
+rather than fabricating buckets.

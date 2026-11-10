@@ -104,6 +104,22 @@ fixture accounting. Three sealed hold-out families each
 scored TP 4, FP 0, FN 1, TN 6, the miss being the documented
 entropy boundary. 107 tests.
 
+## Version 4.0.0
+
+The outward release: the engine now meets arriving content
+where it actually arrives, and proves its parsers against
+mutation. New: field-aware parser fuzzing with per-parser
+mutation scores, script deobfuscation-lite with layered
+re-matching, LNK / email / RTF / ISO 9660 delivery formats, a
+ClamAV differential harness under the equal-knowledge
+protocol, exact streaming hex parity, a delivery rule pack
+under full discipline, a hardened daemon, and single-file
+HTML reports. Three sealed hold-out families each scored
+TP 4 / FP 0 / FN 1 / TN 6, the miss being the standing
+entropy boundary. The 10k corpus runs slower than v3
+(1,280 vs 1,861 files/sec) because v4 analyses script layers
+on every text file; BENCHMARK.md reports it plainly.
+
 ## Author
 
 Gavin Blacklock (Epsilon0xCell). A solo public project: design,

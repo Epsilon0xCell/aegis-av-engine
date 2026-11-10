@@ -106,7 +106,7 @@ def main() -> int:
         "scope": "local run on generated corpus; see BENCHMARK.md protocol",
     }
     print(json.dumps(out, indent=1))
-    (ROOT / "benchmarks" / "results_10k_v3_local.json").write_text(
+    (ROOT / "benchmarks" / "results_10k_v4_local.json").write_text(
         json.dumps(out, indent=1))
     return 0
 

@@ -1,0 +1,14 @@
+{
+ "commitment": "bd4bf56d9612be9b7a41bad601c7fc7ae72273388e8172cf9ba799c4e23c7413",
+ "tp": 4,
+ "fp": 0,
+ "fn": 1,
+ "tn": 6,
+ "misses": [
+  {
+   "file": "holdout_500364_fixture_high_entropy.bin",
+   "kind": "false_negative"
+  }
+ ],
+ "note": "Scored exactly once under the hold-out protocol. Publish verbatim, pass or fail."
+}
