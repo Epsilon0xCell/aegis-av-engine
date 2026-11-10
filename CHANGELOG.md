@@ -1,5 +1,52 @@
 # Changelog
 
+## [5.0.0] - 2026-11-09
+
+### Added
+- Sigma correlation subset (Sigma spec 2.1.0): event_count,
+  value_count, temporal, temporal_ordered over sliding
+  windows with grouping; aggregation correlations rejected
+  by name. Shipped example over the vssadmin base rule.
+- Human-promoted behaviour chains: PrefixSpan candidates stay
+  behind their type wall; promotion records must name the
+  mined pattern, its support, and a human approver, and the
+  loader refuses unsigned promotions.
+- Calibration round 2: per-format Mondrian conditioning with
+  honest global fallback for small groups, and adaptive
+  conformal inference (level adaptation plus history refits)
+  whose guarantee is stated as long-run coverage only, with
+  worst-window coverage reported beside it.
+- Provenance evidence: Zone.Identifier and user/com.apple
+  extended attributes attached to scan_file verdicts, never
+  scored, with a test pinning score invariance (which caught
+  and fixed a verdict-cache pollution bug).
+- EVTX chunk inventory with CRC-32 tamper tripwires
+  (BinXml rendering out of scope and stated).
+- JAR/APK signing triage: v1 manifest digests recomputed,
+  .SF manifest digest checked, APK v2 block signers named
+  (naming, never trust).
+- mmap scanning with the empty-file and changed-during-scan
+  cases specified; a published worker-scaling curve.
+- inotify watch backend (Linux), shipped under its kill
+  criterion: it lives only while the shared semantics suite
+  passes in CI. Polling remains the default.
+
+### Not implemented, by decision
+- OneNote parsing: the research kill criterion triggered
+  (spec revision unpinned, no independent fixture writer).
+  Identification by header GUID only; docs/onenote_decision.md
+  records what would revive it.
+
+### Measured
+- Hold-out families A/B/C (seeds 20280101-3), each scored
+  exactly once: TP 4, FP 0, FN 1, TN 6 per family; every miss
+  is the high-entropy fixture, the standing entropy boundary.
+- 10k corpus: 1,068 files/sec parallel (4 workers), single
+  process median 0.41 ms per file; fixture accounting
+  identical (375 of 500). Worker scaling on this 1.5-vCPU VM
+  inverts: 1 worker is fastest (1,654 files/sec), published
+  as measured.
+
 ## [4.0.0] - 2026-11-09
 
 ### Added

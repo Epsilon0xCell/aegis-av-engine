@@ -221,3 +221,37 @@ real-engine comparison is claimed for v4.0.0; the first real
 run is a release-checklist item for an environment that has
 ClamAV, and the harness reports unavailable status honestly
 rather than fabricating buckets.
+
+## Aegis v5.0.0 release measurements (2026-11-09)
+
+### Sealed hold-out, three families, scored exactly once each
+
+| family | seed | commitment (prefix) | TP | FP | FN | TN |
+|---|---|---|---|---|---|---|
+| A | 20280101 | 79667a35d8c16c2f | 4 | 0 | 1 | 6 |
+| B | 20280102 | 202b98e02bc1c51c | 4 | 0 | 1 | 6 |
+| C | 20280103 | 55aa95adc3028a25 | 4 | 0 | 1 | 6 |
+
+Every miss is the high-entropy fixture (one zip-wrapped):
+the standing entropy boundary, unchanged and not tuned after
+scoring. Full results: benchmarks/holdout_v5_*_results.json.
+
+### 10,000-file corpus (seed-identical to v2 to v4)
+
+Parallel (4 workers): 1,068 files/sec; single process median
+0.41 ms per file. Fixture accounting identical: 375 of 500
+flagged, 9,625 clean. Worker scaling measured separately
+(benchmarks/scaling_10k_local.json): on this 1.5-vCPU shared
+VM the curve inverts (1 worker 1,654 files/sec; 8 workers
+719), with byte-identical summaries at every worker count.
+The inversion is a property of the measured hardware, not a
+defect to be tuned away, and it is published as measured.
+
+### Differential note
+
+The ClamAV differential's first real-engine run remains
+pending: the background install attempt for ClamAV in the
+build environment was interrupted by a runtime restart and
+the package source was unavailable; no comparison is claimed
+until it runs. The harness continues to report its status
+honestly.

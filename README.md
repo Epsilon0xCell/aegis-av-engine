@@ -120,6 +120,20 @@ entropy boundary. The 10k corpus runs slower than v3
 (1,280 vs 1,861 files/sec) because v4 analyses script layers
 on every text file; BENCHMARK.md reports it plainly.
 
+## Version 5.0.0
+
+The depth release: detections that compose over time and
+context. Sigma correlations over sliding windows, behaviour
+chains that grow only through signed human promotion of mined
+candidates, per-format conformal calibration with drift
+adaptation, provenance as unscored evidence, EVTX tamper
+tripwires, JAR and APK signing triage, mmap scanning, and a
+published worker-scaling curve that inverts on small VMs and
+says so. OneNote parsing was killed by its own research
+criterion and the decision is documented in the repo. Three
+sealed hold-out families each scored TP 4 / FP 0 / FN 1 /
+TN 6, the miss being the standing entropy boundary.
+
 ## Author
 
 Gavin Blacklock (Epsilon0xCell). A solo public project: design,
