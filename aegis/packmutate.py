@@ -31,6 +31,10 @@ EQUIVALENT = {
         "all_of over a single string is the same predicate as any_of",
     ("condition_flip", "AEGIS-TEST-001"):
         "all_of over a single string is the same predicate as any_of",
+    ("condition_flip", "AEGIS-DLV-001"):
+        "all_of over a single string is the same predicate as any_of",
+    ("condition_flip", "AEGIS-DLV-002"):
+        "all_of over a single string is the same predicate as any_of",
 }
 
 

@@ -1,0 +1,9 @@
+{
+  "note": "Per-rule fixtures for the delivery pack, enforced by the same linter, FP budget, and mutation gates as the core pack.",
+  "tests": [
+    {"rule_id": "AEGIS-DLV-001", "should_match": "prefix AEGIS-SYNTH-LNK-CRADLE suffix", "should_not_match": "an ordinary shortcut to a folder"},
+    {"rule_id": "AEGIS-DLV-002", "should_match": "blob AEGIS-SYNTH-RTF-EMBED blob", "should_not_match": "a plain rich text document"},
+    {"rule_id": "AEGIS-DLV-003", "should_match_hex": "4C 00 00 00 01 14 02 00 61 72 67 73 20 41 45 47 49 53 2d 53 59 4e 54 48 2d 44 4c 56 2d 41 52 47", "should_not_match": "AEGIS-SYNTH-DLV-ARG without the header"},
+    {"rule_id": "AEGIS-DLV-003", "should_match_hex": "4C 00 00 00 01 14 02 00 61 72 67 73 20 41 45 47 49 53 2d 53 59 4e 54 48 2d 44 4c 56 2d 41 52 47", "should_not_match_hex": "4C 00 00 00 01 14 02 00"}
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "pack": "aegis-delivery-fixtures",
+  "version": "1.0.0",
+  "format": 2,
+  "known_bad_hashes_sha256": [],
+  "rules": [
+    {
+      "id": "AEGIS-DLV-001",
+      "name": "Synthetic LNK cradle fixture",
+      "description": "Marker that exists only in this project's synthetic shortcut-argument fixtures, seen in a decoded script layer.",
+      "weight": 80,
+      "attck": ["T1204.002"],
+      "strings": [
+        {"id": "$a", "type": "text", "value": "AEGIS-SYNTH-LNK-CRADLE"}
+      ],
+      "condition": {"all_of": ["$a"]}
+    },
+    {
+      "id": "AEGIS-DLV-002",
+      "name": "Synthetic RTF embedded marker",
+      "description": "Marker carried in this project's synthetic RTF embedded-object fixtures.",
+      "weight": 70,
+      "attck": ["T1566.001"],
+      "strings": [
+        {"id": "$a", "type": "text", "value": "AEGIS-SYNTH-RTF-EMBED"}
+      ],
+      "condition": {"all_of": ["$a"]}
+    },
+    {
+      "id": "AEGIS-DLV-003",
+      "name": "LNK header with fixture argument marker",
+      "description": "A Shell Link header followed anywhere in the file by the synthetic delivery argument marker.",
+      "weight": 60,
+      "attck": ["T1204.002"],
+      "strings": [
+        {"id": "$hdr", "type": "hex", "value": "4C 00 00 00 01 14 02 00"},
+        {"id": "$b", "type": "text", "value": "AEGIS-SYNTH-DLV-ARG"}
+      ],
+      "condition": {"all_of": ["$hdr", "$b"]}
+    }
+  ]
+}

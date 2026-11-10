@@ -18,18 +18,40 @@ throughput win over process-per-scan CLI scanning comes from.
 from __future__ import annotations
 
 import base64
+import hmac
 import json
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .engine import Engine
 
+MAX_BODY_BYTES = 16 * 1024 * 1024
+
 
 def handle_request(engine: Engine, method: str, route: str,
                    body: bytes = b"", token: str = "",
-                   auth_header: str = "") -> tuple[int, dict]:
-    if token and auth_header != token:
+                   auth_header: str = "",
+                   audit_path: Path | None = None) -> tuple[int, dict]:
+    status, doc = _handle(engine, method, route, body, token,
+                          auth_header)
+    if audit_path is not None:
+        entry = {"ts": time.time(), "method": method, "route": route,
+                 "status": status,
+                 "body_bytes": len(body)}
+        with Path(audit_path).open("a") as fh:
+            fh.write(json.dumps(entry) + "\n")
+    return status, doc
+
+
+def _handle(engine: Engine, method: str, route: str,
+            body: bytes = b"", token: str = "",
+            auth_header: str = "") -> tuple[int, dict]:
+    if token and not hmac.compare_digest(auth_header, token):
         return 401, {"error": "unauthorised"}
+    if len(body) > MAX_BODY_BYTES:
+        return 413, {"error": "body too large",
+                     "limit_bytes": MAX_BODY_BYTES}
     if method == "GET" and route == "/ping":
         return 200, {"status": "ok",
                      "pack": f"{engine.pack.name}@{engine.pack.version}"}
@@ -52,14 +74,16 @@ def handle_request(engine: Engine, method: str, route: str,
     return 404, {"error": "unknown route"}
 
 
-def serve(engine: Engine, port: int = 8765, token: str = "") -> None:
+def serve(engine: Engine, port: int = 8765, token: str = "",
+          audit_path: Path | None = None) -> None:
     class Handler(BaseHTTPRequestHandler):
         def _dispatch(self, method: str) -> None:
             length = int(self.headers.get("Content-Length") or 0)
-            body = self.rfile.read(length) if length else b""
+            body = self.rfile.read(min(length, MAX_BODY_BYTES + 1)) \
+                if length else b""
             status, doc = handle_request(
                 engine, method, self.path, body, token,
-                self.headers.get("X-Aegis-Token", ""))
+                self.headers.get("X-Aegis-Token", ""), audit_path)
             payload = json.dumps(doc).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")

@@ -56,6 +56,13 @@ def main(argv: list[str] | None = None) -> int:
         print(report_json(scan_directory(Path(args[1]), DEFAULT_PACK,
                                          workers=workers)))
         return 0
+    if cmd == "report" and len(args) == 3:
+        from .html_report import render_report
+        from .parscan import scan_directory
+        report = scan_directory(Path(args[1]), DEFAULT_PACK, workers=4)
+        Path(args[2]).write_text(render_report(report))
+        print(f"wrote {args[2]} ({report['files']} files)")
+        return 0
     if cmd == "sbom" and len(args) == 2:
         from . import __version__
         from .sbom import sbom_json
