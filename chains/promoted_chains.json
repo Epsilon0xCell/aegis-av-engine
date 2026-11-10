@@ -1,0 +1,14 @@
+{
+  "note": "Chains promoted by a human reviewer from PrefixSpan candidates. Each entry names its source pattern, support, and approver; the loader refuses unsigned promotions.",
+  "chains": [
+    {
+      "id": "CHAIN-PROMOTED-ERASURE-THEN-BEACON",
+      "description": "Recovery inhibition followed by a beacon, mined from lab telemetry sessions and promoted after review of the candidate list.",
+      "approved_by": "Gavin Blacklock",
+      "promoted_from": {
+        "pattern": ["process_create:T1490", "beacon:T1071.001"],
+        "support": 3
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "title": "Repeated shadow deletion attempts in five minutes",
+  "id": "aegis-corr-0001",
+  "correlation": {
+    "type": "event_count",
+    "rules": "98432000-0000-4000-8000-000000000101",
+    "group-by": ["host"],
+    "timespan": "5m",
+    "condition": {"gte": 3}
+  }
+}

@@ -40,7 +40,8 @@ CHAINS = [
 ]
 
 
-def analyse(events: list[dict]) -> list[dict]:
+def analyse(events: list[dict],
+            extra_chains: list[dict] | None = None) -> list[dict]:
     """Partial-credit chain analysis (v2).
 
     correlate() answers a binary question for coverage counting:
@@ -54,8 +55,15 @@ def analyse(events: list[dict]) -> list[dict]:
     (at least half), or absent. Only fired chains may be counted
     as ATT&CK coverage anywhere downstream.
     """
+    extras = list(extra_chains or [])
+    for chain in extras:
+        if not isinstance(chain, dict):
+            raise TypeError(
+                "extra_chains must be promoted chain records (dicts "
+                "from aegis.promoted.load_promoted); miner "
+                "candidates are a different type on purpose")
     results = []
-    for chain in CHAINS:
+    for chain in list(CHAINS) + extras:
         steps = chain.get("steps", [])
         total = sum(s["weight"] for s in steps) or 1
         matched = []
