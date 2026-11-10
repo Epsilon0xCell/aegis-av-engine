@@ -1,6 +1,9 @@
 import json
 import stat
+import sys
 from pathlib import Path
+
+import pytest
 
 from aegis.corpora import make_clean_corpus, make_fixture_corpus
 from aegis.differential import (_hexpattern_to_clam,
@@ -62,6 +65,10 @@ def _stub_clamscan(tmp_path: Path) -> Path:
     return stub
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason=(
+    "the stub clamscan is a POSIX script; Windows cannot exec "
+    "it (WinError 193). The harness itself runs a real "
+    "clamscan.exe on Windows; the contract test is POSIX-only."))
 def test_differential_end_to_end_with_stub(tmp_path):
     corpus = tmp_path / "corpus"
     make_clean_corpus(corpus / "clean")
