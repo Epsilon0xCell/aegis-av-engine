@@ -15,7 +15,7 @@ from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
 from . import (authenticode, formats_cfb, formats_dotnet, formats_pdf,
-               ovba, similarity, tlsh)
+               ovba, script_lab, similarity, tlsh)
 from . import segmented as segmented_mod
 from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
@@ -121,6 +121,32 @@ class Engine:
                                  "heuristic": "pdf_embedded_files",
                                  "points": 10,
                                  "detail": "document embeds files"})
+        script_result = None
+        if fmt in ("text", "script", "unknown") and len(data) <= 1024 * 1024:
+            script_result = script_lab.analyze_script(data)
+            for finding in script_result["findings"]:
+                evidence.append({"type": "format_finding", **finding})
+            for depth, kind, blob in script_result["layer_data"]:
+                if depth == 0:
+                    continue
+                for m in self.pack.match(
+                        blob, {"format": "script_layer",
+                               "entropy": formats.shannon_entropy(blob),
+                               "size": len(blob)}):
+                    score += m["weight"]
+                    evidence.append({"type": "script_layer_match",
+                                     "layer": kind, "depth": depth, **m})
+            if script_result["decoded_only_signals"] \
+                    and script_result["layers"]:
+                score += 20
+                evidence.append(
+                    {"type": "heuristic",
+                     "heuristic": "script_obfuscated_high_risk",
+                     "points": 20,
+                     "detail": "high-risk APIs appear only after "
+                               "decoding: "
+                               + ", ".join(
+                                   script_result["decoded_only_signals"])})
         cfb_result = None
         if fmt == "cfb":
             cfb_result = formats_cfb.parse_cfb(data)
@@ -253,6 +279,12 @@ class Engine:
                 for i in range(len(marks) - 1)}
         verdict["authenticode"] = auth_result
         verdict["dotnet"] = dotnet_result
+        if script_result is not None:
+            verdict["script"] = {
+                k: script_result[k]
+                for k in ("layers", "raw_signals",
+                          "decoded_only_signals",
+                          "unresolved_constructs")}
         verdict["cfb"] = ({k: v for k, v in cfb_result.items()
                            if k != "streams"}
                           if cfb_result is not None else None)
