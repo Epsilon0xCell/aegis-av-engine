@@ -80,7 +80,9 @@ def test_provenance_xattrs(tmp_path):
     target.write_bytes(b"data")
     try:
         os.setxattr(target, "user.aegis.test", b"hello")
-    except OSError:
-        pytest.skip("filesystem refuses user xattrs here")
+    except (OSError, AttributeError):
+        pytest.skip("this platform/Python build has no usable "
+                    "user xattrs (caught in CI on Windows and "
+                    "macOS runners; Linux exercises the path)")
     prov = read_provenance(target)
     assert prov["xattrs"].get("user.aegis.test") == "hello"
