@@ -15,8 +15,9 @@ from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
 from . import (authenticode, formats_cfb, formats_dotnet, formats_eml,
-               formats_iso, formats_lnk, formats_pdf, formats_rtf,
-               ovba, script_lab, similarity, tlsh)
+               formats_evtx, formats_iso, formats_jar, formats_lnk,
+               formats_pdf, formats_rtf, ovba, script_lab, similarity,
+               tlsh)
 from . import segmented as segmented_mod
 from . import views as views_mod
 from .hashing import BloomFilter, digests, fuzzy_digest, fuzzy_similarity
@@ -237,6 +238,37 @@ class Engine:
                                "decoding: "
                                + ", ".join(
                                    script_result["decoded_only_signals"])})
+        evtx_result = None
+        jar_result = None
+        if fmt == "evtx":
+            evtx_result = formats_evtx.parse_evtx(data)
+            for finding in evtx_result["findings"]:
+                evidence.append({"type": "format_finding", **finding})
+            if any(f["type"].endswith("checksum_mismatch")
+                   or f["type"].endswith("crc_mismatch")
+                   for f in evtx_result["findings"]):
+                score += 25
+                evidence.append(
+                    {"type": "heuristic",
+                     "heuristic": "evtx_tamper_evidence",
+                     "points": 25,
+                     "detail": "event log checksums do not recompute; "
+                               "the file was modified after writing"})
+        if fmt in ("zip", "zip_container"):
+            jar_result = formats_jar.analyze_archive(data)
+            for finding in jar_result["findings"]:
+                evidence.append({"type": "format_finding", **finding})
+            mismatches = sum(
+                1 for f in jar_result["findings"]
+                if f["type"] == "jar_entry_digest_mismatch")
+            if mismatches:
+                score += 30
+                evidence.append(
+                    {"type": "heuristic",
+                     "heuristic": "jar_digest_mismatch",
+                     "points": 30,
+                     "detail": f"{mismatches} archive entries no "
+                               f"longer match their signed digests"})
         cfb_result = None
         if fmt == "cfb":
             cfb_result = formats_cfb.parse_cfb(data)
@@ -369,6 +401,12 @@ class Engine:
                 for i in range(len(marks) - 1)}
         verdict["authenticode"] = auth_result
         verdict["dotnet"] = dotnet_result
+        if evtx_result is not None:
+            verdict["evtx"] = {
+                k: v for k, v in evtx_result.items() if k != "findings"}
+        if jar_result is not None and jar_result["findings"]:
+            verdict["archive_signing"] = {
+                k: v for k, v in jar_result.items() if k != "findings"}
         if delivery_result is not None:
             summary = {k: v for k, v in delivery_result.items()
                        if k not in ("embedded", "members", "attachments")}

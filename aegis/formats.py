@@ -32,6 +32,10 @@ def identify(data: bytes) -> str:
     for magic, kind in MAGICS:
         if data.startswith(magic):
             return kind
+    if data.startswith(bytes.fromhex("E4525C7B8CD8A74DAEB15378D02996D3")):
+        return "onenote"
+    if data.startswith(b"ElfFile\x00"):
+        return "evtx"
     if data[:4] == b"L\x00\x00\x00" and data[4:20] == LNK_CLSID:
         return "lnk"
     if data.startswith(b"{\\rtf"):
