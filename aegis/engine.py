@@ -14,7 +14,8 @@ import time
 from pathlib import Path
 
 from . import containers, formats, formats_elf, formats_macho, formats_pe
-from . import (authenticode, formats_cfb, formats_dotnet, formats_pdf,
+from . import (authenticode, formats_cfb, formats_dotnet, formats_eml,
+               formats_iso, formats_lnk, formats_pdf, formats_rtf,
                ovba, script_lab, similarity, tlsh)
 from . import segmented as segmented_mod
 from . import views as views_mod
@@ -47,7 +48,8 @@ class Engine:
         scan_bytes)."""
         return tlsh.tlsh_digest(data)
 
-    def scan_bytes(self, data: bytes, name: str = "<memory>") -> dict:
+    def scan_bytes(self, data: bytes, name: str = "<memory>",
+                   _depth: int = 0) -> dict:
         started = time.perf_counter()
         marks: list[tuple[str, float]] = [("start", started)]
 
@@ -121,6 +123,94 @@ class Engine:
                                  "heuristic": "pdf_embedded_files",
                                  "points": 10,
                                  "detail": "document embeds files"})
+        delivery_result = None
+        if fmt == "lnk":
+            delivery_result = formats_lnk.parse_lnk(data)
+            for finding in delivery_result["findings"]:
+                evidence.append({"type": "format_finding", **finding})
+            if delivery_result.get("arguments"):
+                sub = script_lab.analyze_script(
+                    delivery_result["arguments"].encode())
+                for depth2, kind, blob in sub["layer_data"]:
+                    if depth2 == 0:
+                        continue
+                    for m in self.pack.match(
+                            blob, {"format": "script_layer",
+                                   "entropy": formats.shannon_entropy(blob),
+                                   "size": len(blob)}):
+                        score += m["weight"]
+                        evidence.append(
+                            {"type": "script_layer_match",
+                             "layer": f"lnk_arguments:{kind}",
+                             "depth": depth2, **m})
+                if sub["decoded_only_signals"] and sub["layers"]:
+                    score += 20
+                    evidence.append(
+                        {"type": "heuristic",
+                         "heuristic": "lnk_obfuscated_arguments",
+                         "points": 20,
+                         "detail": "shortcut arguments hide high-risk "
+                                   "APIs behind encoding"})
+            if any(f["type"] == "lnk_script_host"
+                   for f in delivery_result["findings"]):
+                score += 15
+                evidence.append({"type": "heuristic",
+                                 "heuristic": "lnk_script_host",
+                                 "points": 15,
+                                 "detail": "shortcut launches a script "
+                                           "host"})
+        elif fmt == "rtf":
+            delivery_result = formats_rtf.parse_rtf(data)
+            for finding in delivery_result["findings"]:
+                evidence.append({"type": "format_finding", **finding})
+            if _depth < 2:
+                for blob in delivery_result["embedded"]:
+                    sub = self.scan_bytes(blob, name + "!objdata",
+                                          _depth + 1)
+                    evidence.append(
+                        {"type": "rtf_embedded_verdict",
+                         "verdict": sub["verdict"],
+                         "score": sub["score"]})
+                    score = max(score, sub["score"])
+        elif fmt == "eml":
+            delivery_result = formats_eml.parse_eml(data)
+            for finding in delivery_result["findings"]:
+                evidence.append({"type": "format_finding", **finding})
+            if _depth < 2:
+                for att in delivery_result["attachments"]:
+                    if att.get("data"):
+                        sub = self.scan_bytes(
+                            att["data"], name + "!" + att["filename"],
+                            _depth + 1)
+                        evidence.append(
+                            {"type": "eml_attachment_verdict",
+                             "filename": att["filename"],
+                             "verdict": sub["verdict"],
+                             "score": sub["score"]})
+                        score = max(score, sub["score"])
+        elif fmt == "iso":
+            delivery_result = formats_iso.parse_iso(data)
+            for finding in delivery_result["findings"]:
+                evidence.append({"type": "format_finding", **finding})
+            best = 0
+            for member_name, blob in delivery_result["members"].items():
+                member_facts = {"format": formats.identify(blob),
+                                "entropy": formats.shannon_entropy(blob),
+                                "size": len(blob)}
+                for m in self.pack.match(blob, member_facts):
+                    best = max(best, m["weight"])
+                    evidence.append({"type": "iso_member_match",
+                                     "member": member_name, **m})
+                if member_name.lower().endswith(".lnk"):
+                    lnk = formats_lnk.parse_lnk(blob)
+                    for finding in lnk["findings"]:
+                        evidence.append(
+                            {"type": "format_finding",
+                             "member": member_name, **finding})
+                    if any(f["type"] == "lnk_script_host"
+                           for f in lnk["findings"]):
+                        best = max(best, 15)
+            score = max(score, best)
         script_result = None
         if fmt in ("text", "script", "unknown") and len(data) <= 1024 * 1024:
             script_result = script_lab.analyze_script(data)
@@ -279,6 +369,16 @@ class Engine:
                 for i in range(len(marks) - 1)}
         verdict["authenticode"] = auth_result
         verdict["dotnet"] = dotnet_result
+        if delivery_result is not None:
+            summary = {k: v for k, v in delivery_result.items()
+                       if k not in ("embedded", "members", "attachments")}
+            if "attachments" in delivery_result:
+                summary["attachments"] = [
+                    {kk: vv for kk, vv in a.items() if kk != "data"}
+                    for a in delivery_result["attachments"]]
+            if "members" in delivery_result:
+                summary["members"] = sorted(delivery_result["members"])
+            verdict["delivery"] = summary
         if script_result is not None:
             verdict["script"] = {
                 k: script_result[k]

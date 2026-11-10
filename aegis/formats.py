@@ -25,10 +25,28 @@ MAGICS = (
 )
 
 
+LNK_CLSID = bytes.fromhex("0114020000000000C000000000000046")
+
+
 def identify(data: bytes) -> str:
     for magic, kind in MAGICS:
         if data.startswith(magic):
             return kind
+    if data[:4] == b"L\x00\x00\x00" and data[4:20] == LNK_CLSID:
+        return "lnk"
+    if data.startswith(b"{\\rtf"):
+        return "rtf"
+    if len(data) > 32774 and data[32769:32774] == b"CD001":
+        return "iso"
+    head_lines = data[:1024].split(b"\n")[:12]
+    header_like = sum(1 for line in head_lines
+                      if b":" in line and line.split(b":", 1)[0]
+                      .strip().lower() in (
+                          b"from", b"to", b"subject", b"date",
+                          b"mime-version", b"content-type",
+                          b"message-id", b"return-path"))
+    if header_like >= 2:
+        return "eml"
     head = data[:512].lower()
     if b"<script" in head or b"powershell" in head or b"/bin/sh" in head:
         return "script"
