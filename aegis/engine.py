@@ -397,7 +397,15 @@ class Engine:
         return verdict
 
     def scan_file(self, path: Path) -> dict:
-        return self.scan_bytes(path.read_bytes(), name=str(path))
+        verdict = self.scan_bytes(path.read_bytes(), name=str(path))
+        from .provenance import read_provenance
+        prov = read_provenance(path)
+        if prov["present"]:
+            # copy before attaching: scan_bytes may return the
+            # shared cached verdict object, and provenance is a
+            # property of this path, not of the content
+            verdict = {**verdict, "provenance": prov}
+        return verdict
 
     def scan_stream(self, path: Path, chunk_size: int = 65536) -> dict:
         """Streaming scan for files too large to hold comfortably:

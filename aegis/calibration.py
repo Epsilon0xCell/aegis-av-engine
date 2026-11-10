@@ -283,3 +283,88 @@ def generate_calibration_corpus(root) -> dict:
             rng, timestamp=0, section_blob=section, overlay=overlay))
         manifest["fixture_like"].append(name)
     return manifest
+
+
+class FormatCalibration:
+    """Per-format Mondrian conditioning (v5).
+
+    A score of 30 means different things for a PE and for a
+    text file; conditioning the conformal split on the format
+    is the Mondrian move. Groups with too little data per class
+    (MIN_PER_CLASS) do not get their own quantiles: they fall
+    back to the global calibration and the result says so,
+    because a quantile fitted on three points is a fiction
+    with extra steps.
+    """
+
+    MIN_PER_CLASS = 5
+    VERSION = "aegis-calibration@2.0.0"
+
+    def __init__(self, triples: list[tuple[int, bool, str]]) -> None:
+        self.global_cal = Calibration([(s, m) for s, m, _f in triples])
+        by_format: dict[str, list[tuple[int, bool]]] = {}
+        for score, malicious, fmt in triples:
+            by_format.setdefault(fmt, []).append((score, malicious))
+        self.by_format: dict[str, Calibration] = {}
+        self.fallback_formats: list[str] = []
+        for fmt, pairs in sorted(by_format.items()):
+            clean = sum(1 for _s, m in pairs if not m)
+            mal = sum(1 for _s, m in pairs if m)
+            if clean >= self.MIN_PER_CLASS and mal >= self.MIN_PER_CLASS:
+                self.by_format[fmt] = Calibration(pairs)
+            else:
+                self.fallback_formats.append(fmt)
+
+    def classify(self, score: int, fmt: str,
+                 alpha: float = 0.1) -> dict:
+        cal = self.by_format.get(fmt)
+        if cal is None:
+            result = classify_score(score, self.global_cal, alpha)
+            result["conditioning"] = "global (format group too small)"
+            return result
+        result = classify_score(score, cal, alpha)
+        result["conditioning"] = f"format:{fmt}"
+        return result
+
+
+def aci_run(calibration_pairs: list[tuple[int, bool]],
+            stream: list[tuple[int, bool]], alpha: float = 0.1,
+            gamma: float = 0.01, window: int = 50) -> dict:
+    """Adaptive Conformal Inference over a stream (after Gibbs
+    and Candes): the miscoverage level adapts online,
+    alpha_{t+1} = alpha_t + gamma * (alpha - err_t), and the
+    calibration itself is refit on the accumulated labelled
+    history, because a level adjustment alone cannot chase a
+    nonconformity distribution that has moved outside the
+    original calibration range (demonstrated during
+    development: static quantiles capped coverage at 0.78
+    under a +15 score drift no matter how alpha moved). The
+    guarantee is a LONG-RUN average coverage statement only.
+    The worst window's coverage is computed and returned
+    beside it, because a method whose average is honest and
+    whose bad stretches are hidden is only half reported."""
+    history = list(calibration_pairs)
+    alpha_t = alpha
+    covered: list[bool] = []
+    for score, malicious in stream:
+        cal = Calibration(history)
+        prediction = cal.prediction_set(score, alpha_t)
+        label = "malicious" if malicious else "clean"
+        ok = label in prediction
+        covered.append(ok)
+        err = 0 if ok else 1
+        alpha_t = min(0.5, max(0.001, alpha_t + gamma * (alpha - err)))
+        history.append((score, malicious))
+    worst = 1.0
+    if len(covered) >= window:
+        worst = min(
+            sum(covered[i:i + window]) / window
+            for i in range(0, len(covered) - window + 1))
+    return {"steps": len(stream),
+            "long_run_coverage": (sum(covered) / len(covered)
+                                  if covered else 0.0),
+            "worst_window_coverage": worst,
+            "window": window,
+            "final_alpha": round(alpha_t, 4),
+            "guarantee": "long-run average coverage only; no "
+                         "per-window or per-instance guarantee"}
