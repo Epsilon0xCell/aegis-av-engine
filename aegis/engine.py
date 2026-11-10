@@ -402,11 +402,13 @@ class Engine:
     def scan_stream(self, path: Path, chunk_size: int = 65536) -> dict:
         """Streaming scan for files too large to hold comfortably:
         incremental hashes, incremental Aho-Corasick (state is one
-        integer carried across chunks), and streaming windowed
-        entropy. Text-pattern rules and the dilution heuristic are
-        evaluated; hex-pattern rules and deep parsing are not, and
-        the verdict says so plainly. Verdicts on ordinary files are
-        equivalence-tested against the in-memory path."""
+        integer carried across chunks), streaming windowed
+        entropy, and hex-pattern rules evaluated exactly through
+        a carry window bounded by each pattern's maximum span
+        (jumps are capped, so spans are finite). Deep format
+        parsing and container inspection are not performed, and
+        the verdict says so plainly. Verdicts on ordinary files
+        are equivalence-tested against the in-memory path."""
         import hashlib as _hl
 
         from . import segmented as _seg
@@ -416,13 +418,21 @@ class Engine:
         hits: dict[str, int] = {}
         size = 0
         head = b""
+        hex_carry: dict[str, bytes] = {}
+        hex_matched: set[str] = set()
+        hex_skipped: list[str] = []
+        for key, pattern in self.pack.hex_patterns.items():
+            if pattern.max_span > 65536:
+                hex_skipped.append(key)
+            else:
+                hex_carry[key] = b""
         with path.open("rb") as fh:
             while True:
                 chunk = fh.read(chunk_size)
                 if not chunk:
                     break
-                if not head:
-                    head = chunk[:512]
+                if len(head) < 512:
+                    head = (head + chunk)[:512]
                 size += len(chunk)
                 sha.update(chunk)
                 md5.update(chunk)
@@ -430,15 +440,38 @@ class Engine:
                 delta, state = self.pack.automaton.feed(state, chunk)
                 for tag, n in delta.items():
                     hits[tag] = hits.get(tag, 0) + n
+                for key, pattern in self.pack.hex_patterns.items():
+                    if key in hex_matched or key in hex_skipped:
+                        continue
+                    window = hex_carry[key] + chunk
+                    if pattern.search(window):
+                        hex_matched.add(key)
+                    span = pattern.max_span
+                    hex_carry[key] = window[-(span - 1):] if span > 1 \
+                        else b""
         fmt = formats.identify(head)
         seg = tracker.finish()
         evidence: list[dict] = [{"type": "stream_note",
-                                 "detail": "streaming mode: hex-pattern rules "
-                                           "and deep parsing not evaluated"}]
+                                 "detail": "streaming mode: text and hex "
+                                           "rules evaluated exactly (hex "
+                                           "via bounded carry window); "
+                                           "deep format parsing and "
+                                           "container inspection are not "
+                                           "performed"}]
+        if hex_skipped:
+            evidence.append({"type": "stream_hex_skipped",
+                             "patterns": hex_skipped,
+                             "detail": "pattern span above the 64KiB "
+                                       "carry cap"})
         score = 0
         for rule in self.pack.rules:
-            ids = self.pack.matched_string_ids(rule, b"", hits) \
-                if all(s["type"] == "text" for s in rule["strings"]) else set()
+            ids = set()
+            for s in rule["strings"]:
+                key = f"{rule['id']}|{s['id']}"
+                if s["type"] == "text" and hits.get(key, 0):
+                    ids.add(s["id"])
+                elif s["type"] == "hex" and key in hex_matched:
+                    ids.add(s["id"])
             from .rulelang import evaluate_condition
             if ids and evaluate_condition(rule["condition"], ids,
                                           {"format": fmt, "entropy": seg["max"],

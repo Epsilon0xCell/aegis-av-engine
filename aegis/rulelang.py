@@ -70,6 +70,14 @@ class HexPattern:
         self._prefix_min = sum(1 if t[0] != "jump" else t[1] for t in prefix)
         self._prefix_max = sum(1 if t[0] != "jump" else t[2] for t in prefix)
 
+    @property
+    def max_span(self) -> int:
+        """Longest possible match length in bytes: every token
+        at its maximum width. Bounded by construction (jumps are
+        capped at MAX_JUMP), which is what makes exact streaming
+        evaluation possible with a finite carry window."""
+        return sum(1 if t[0] != "jump" else t[2] for t in self.tokens)
+
     def _find_anchor(self) -> tuple[bytes, int]:
         best, best_tok, run, run_tok = b"", 0, bytearray(), 0
         for i, tok in enumerate(self.tokens):
