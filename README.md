@@ -134,6 +134,21 @@ criterion and the decision is documented in the repo. Three
 sealed hold-out families each scored TP 4 / FP 0 / FN 1 /
 TN 6, the miss being the standing entropy boundary.
 
+## Version 5.0.1
+
+A CI/CD-only patch: no engine changes. It repairs the two
+platform failures that made the v4.0.0 and v5.0.0 tag runs red
+on Windows and macOS (the xattr test now probes whether xattrs
+actually work instead of guessing from the platform; the
+differential harness runs Python-script scanners through the
+interpreter, so its contract test runs on Windows too), pins
+the CI matrix to explicit runner images, moves every action
+to its current major version, and gates the release workflow
+so a tag can only publish from a commit that is on main with
+a green CI run for that exact commit. Published tags are
+never moved; that is why this ships as 5.0.1. The full rules
+live in RELEASING.md.
+
 ## Author
 
 Gavin Blacklock (Epsilon0xCell). A solo public project: design,

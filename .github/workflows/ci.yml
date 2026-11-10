@@ -1,17 +1,35 @@
 name: aegis-ci
 on: [push, pull_request]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-15, windows-2025]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Build artifacts are never tracked
+        shell: bash
+        run: |
+          if [ -n "$(git ls-files dist/)" ]; then
+            echo "dist/ is tracked in git; release assets must be built fresh, never checked out" >&2
+            exit 1
+          fi
       - run: pip install -e ".[dev]"
-      - run: pytest -q
+      - run: pytest -q -rs
       - run: python -m aegis.cli demo
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### aegis-ci on ${{ matrix.os }}"
+            python -c "import platform, sys; print('- python:', sys.version.split()[0]); print('- platform:', platform.platform())"
+          } >> "$GITHUB_STEP_SUMMARY"

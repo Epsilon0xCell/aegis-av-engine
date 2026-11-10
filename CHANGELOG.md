@@ -1,5 +1,35 @@
 # Changelog
 
+## [5.0.1] - 2026-11-09
+
+CI/CD only; no engine changes.
+
+### Fixed
+- The provenance xattr test now probes capability (a real
+  set/get round-trip) instead of catching AttributeError
+  after the fact. `os.setxattr` is Linux-only, so the old
+  shape failed on the Windows and macOS runners while Linux
+  stayed green; that is what made the v5.0.0 tag run red.
+- The differential harness runs a Python-script scanner
+  through sys.executable instead of relying on a shebang,
+  so the stub contract test runs on Windows (previously
+  skipped there with WinError 193, the v4.0.0 tag failure).
+
+### Changed
+- CI matrix pinned to explicit runner images (ubuntu-24.04,
+  macos-15, windows-2025) instead of the moving -latest
+  aliases; actions moved to current majors (checkout v7,
+  setup-python v7, upload-artifact v7,
+  attest-build-provenance v4); pytest runs with -rs so skip
+  reasons are visible per OS; CI fails if dist/ is ever
+  tracked in git again.
+- Release workflow gained a verify gate (tagged commit on
+  main with a successful CI run for that exact SHA), builds
+  into a fresh dist, publishes an explicit two-asset list
+  instead of globs, and verifies the published asset set
+  from the server side. RELEASING.md records the rules,
+  including: a published tag is never moved.
+
 ## [5.0.0] - 2026-11-09
 
 ### Added

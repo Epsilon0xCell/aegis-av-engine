@@ -32,6 +32,7 @@ import hashlib
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from . import rulelang
@@ -189,11 +190,18 @@ def run_differential(engine, pack: RulePack, corpus_dir: Path,
                 "note": "converted database generated and verified "
                         "in tests with a stub binary; no comparison "
                         "is claimed without a real clamscan"}
-    proc = subprocess.run(
-        [binary, "-r", "--no-summary",
-         *[f"--database={work_dir / name}" for name in db["files"]],
-         str(corpus_dir)],
-        capture_output=True, text=True, timeout=600)
+    cmd = [binary, "-r", "--no-summary",
+           *[f"--database={work_dir / name}" for name in db["files"]],
+           str(corpus_dir)]
+    if str(binary).endswith(".py"):
+        # A Python-script scanner (the test stub, a wrapped
+        # install) cannot be executed directly on Windows,
+        # where a shebang means nothing (WinError 193). Run it
+        # through the interpreter so the harness behaves the
+        # same on every platform.
+        cmd = [sys.executable, *cmd]
+    proc = subprocess.run(cmd, capture_output=True, text=True,
+                          timeout=600)
     clam = parse_clamscan_output(proc.stdout)
     buckets: dict[str, int] = {}
     details = []

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aegis-av-engine"
-version = "5.0.0"
+version = "5.0.1"
 description = "Aegis: an open, cross-platform, explainable antivirus scanning engine for education and research. No real malware is used anywhere in this project."
 requires-python = ">=3.10"
 dependencies = []

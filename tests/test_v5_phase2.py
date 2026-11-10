@@ -75,14 +75,27 @@ def test_provenance_zone_identifier_and_score_invariance(tmp_path):
     assert "provenance" not in without
 
 
+def _xattr_works(path) -> bool:
+    """Capability probe, not a platform guess: CPython documents
+    the xattr family as Linux-only, and even on Linux a
+    filesystem may refuse them. Probe with a real set/get
+    round-trip on the actual file."""
+    if not (hasattr(os, "setxattr") and hasattr(os, "getxattr")):
+        return False
+    try:
+        os.setxattr(path, "user.aegis.probe", b"1")
+        return os.getxattr(path, "user.aegis.probe") == b"1"
+    except OSError:
+        return False
+
+
 def test_provenance_xattrs(tmp_path):
     target = tmp_path / "f.bin"
     target.write_bytes(b"data")
-    try:
-        os.setxattr(target, "user.aegis.test", b"hello")
-    except (OSError, AttributeError):
-        pytest.skip("this platform/Python build has no usable "
-                    "user xattrs (caught in CI on Windows and "
-                    "macOS runners; Linux exercises the path)")
+    if not _xattr_works(target):
+        pytest.skip("no working user xattrs on this platform "
+                    "or filesystem (probed with a real set/get "
+                    "round-trip, not guessed from the OS name)")
+    os.setxattr(target, "user.aegis.test", b"hello")
     prov = read_provenance(target)
     assert prov["xattrs"].get("user.aegis.test") == "hello"

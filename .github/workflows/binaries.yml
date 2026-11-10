@@ -9,6 +9,9 @@ on:
     tags: ["v*"]
 permissions:
   contents: read
+concurrency:
+  group: aegis-binaries-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   build:
     name: binaries-${{ matrix.os }}
@@ -16,10 +19,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-15, windows-2025]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Build onedir binary
@@ -33,7 +36,8 @@ jobs:
           BIN=$(find dist-bin -name 'aegis*' -type f -maxdepth 3 | head -1)
           "$BIN" scan marker.txt | grep -q malicious_pattern
           echo "frozen binary smoke ok: $BIN"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: aegis-binaries-${{ matrix.os }}
           path: dist-bin
+          if-no-files-found: error
