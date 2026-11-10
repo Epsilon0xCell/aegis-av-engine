@@ -6,51 +6,51 @@
  "files": 10000,
  "total_bytes": 10537934,
  "parallel_workers": 4,
- "parallel_seconds": 7.81,
- "parallel_files_per_sec": 1280.46,
- "single_process_median_ms": 0.36,
- "single_process_p95_ms": 1.212,
- "peak_rss_mb": 60.2,
+ "parallel_seconds": 8.58,
+ "parallel_files_per_sec": 1165.56,
+ "single_process_median_ms": 0.431,
+ "single_process_p95_ms": 1.32,
+ "peak_rss_mb": 60.7,
  "slowest_10": [
   {
-   "file": "data_07926.json",
-   "ms": 27.34
+   "file": "data_03005.json",
+   "ms": 34.9
   },
   {
-   "file": "app_09478.exe",
-   "ms": 25.09
+   "file": "doc_01000.txt",
+   "ms": 32.41
   },
   {
-   "file": "blob_09467.bin",
-   "ms": 16.76
+   "file": "doc_01250.txt",
+   "ms": 26.34
   },
   {
-   "file": "doc_05904.txt",
-   "ms": 16.23
+   "file": "doc_05014.txt",
+   "ms": 23.54
   },
   {
-   "file": "data_03285.json",
-   "ms": 15.32
+   "file": "blob_01147.bin",
+   "ms": 23.53
   },
   {
-   "file": "blob_03727.bin",
-   "ms": 14.51
+   "file": "doc_01121.txt",
+   "ms": 22.54
   },
   {
-   "file": "doc_04854.txt",
-   "ms": 12.21
+   "file": "doc_03454.txt",
+   "ms": 19.13
   },
   {
-   "file": "doc_02890.txt",
-   "ms": 11.89
+   "file": "app_04068.exe",
+   "ms": 18.99
   },
   {
-   "file": "doc_00710.txt",
-   "ms": 11.15
+   "file": "blob_09437.bin",
+   "ms": 16.67
   },
   {
-   "file": "doc_01420.txt",
-   "ms": 10.55
+   "file": "data_08425.json",
+   "ms": 16.32
   }
  ],
  "summary_parallel": {

@@ -445,6 +445,41 @@ class Engine:
             verdict = {**verdict, "provenance": prov}
         return verdict
 
+    def scan_file_mmap(self, path: Path) -> dict:
+        """scan_file over a read-only memory map, with the two
+        cases the v5 research named specified rather than
+        discovered later: an empty file cannot be mapped and is
+        scanned as empty bytes, and a file whose size or mtime
+        changes while mapped is reported as changed during scan
+        and rescanned from a plain read, with the verdict
+        saying which bytes it describes."""
+        import mmap as _mmap
+        import os as _os
+        try:
+            before = path.stat()
+        except OSError:
+            return self.scan_bytes(b"", name=str(path))
+        if before.st_size == 0:
+            return self.scan_file(path)
+        with path.open("rb") as fh:
+            with _mmap.mmap(fh.fileno(), 0,
+                            access=_mmap.ACCESS_READ) as mm:
+                data = mm[:]
+        verdict = self.scan_bytes(data, name=str(path))
+        try:
+            after = path.stat()
+            changed = (after.st_size != before.st_size
+                       or after.st_mtime != before.st_mtime)
+        except OSError:
+            changed = True
+        if changed:
+            verdict = self.scan_file(path)
+            verdict["file_changed_during_scan"] = True
+            verdict["scan_method"] = "read (mmap attempt superseded)"
+        else:
+            verdict["scan_method"] = "mmap"
+        return verdict
+
     def scan_stream(self, path: Path, chunk_size: int = 65536) -> dict:
         """Streaming scan for files too large to hold comfortably:
         incremental hashes, incremental Aho-Corasick (state is one

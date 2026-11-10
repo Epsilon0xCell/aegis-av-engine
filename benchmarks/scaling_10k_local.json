@@ -1,0 +1,29 @@
+{
+ "corpus": "/tmp/aegis-10k",
+ "rows": [
+  {
+   "workers": 1,
+   "seconds": 6.045,
+   "files_per_sec": 1654.19,
+   "summary_identical": true
+  },
+  {
+   "workers": 2,
+   "seconds": 8.456,
+   "files_per_sec": 1182.6,
+   "summary_identical": true
+  },
+  {
+   "workers": 4,
+   "seconds": 12.487,
+   "files_per_sec": 800.82,
+   "summary_identical": true
+  },
+  {
+   "workers": 8,
+   "seconds": 13.906,
+   "files_per_sec": 719.13,
+   "summary_identical": true
+  }
+ ]
+}
