@@ -1,5 +1,11 @@
 # Aegis AV Engine
 
+![Aegis AV Engine banner](banner.png)
+
+Current release: 5.0.1 (see the Version 5.0.1 section below).
+The test suite currently collects 148 test cases. The sections
+below are the per-release summaries, starting with 1.0.0.
+
 **Version 1.0.0.** What grew since 0.1.0, each subsystem tested
 and documented: safe container scanning under one shared budget,
 deep PE/ELF/Mach-O parsers, a rule language with hex patterns and
